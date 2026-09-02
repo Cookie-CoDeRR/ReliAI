@@ -6,7 +6,8 @@ from harness.schemas import (
     InvestigationVerdict,
     TriageAssessment,
     RootCauseHypothesis,
-    CriticEvaluation
+    CriticEvaluation,
+    EvidenceItem
 )
 from harness.ollama_client import AsyncOllamaClient
 from harness.baseline_engine import BaselineEngine
@@ -15,6 +16,7 @@ from harness.agents.evidence_rag_agent import EvidenceRAGAgent
 from harness.agents.telemetry_agent import TelemetryAgent
 from harness.agents.quality_fit_agent import QualityFitAgent
 from harness.agents.maintenance_agent import MaintenanceAgent
+from harness.agents.vision_agent import VisionAgent
 from harness.agents.root_cause_agent import RootCauseAgent
 from harness.agents.critic_agent import CriticAgent
 from harness.agents.confidence_engine import ConfidenceEngine
@@ -29,12 +31,13 @@ class InvestigationOrchestrator:
         self.client = ollama_client or AsyncOllamaClient()
         self.baseline_engine = baseline_engine or BaselineEngine()
 
-        # Initialize specialized agents
+        # Initialize specialized domain agents (Consolidated on Gemma + Qwen2.5-VL for vision)
         self.triage_agent = TriageAgent(self.client)
         self.evidence_agent = EvidenceRAGAgent(self.baseline_engine)
         self.telemetry_agent = TelemetryAgent()
         self.quality_agent = QualityFitAgent()
         self.maintenance_agent = MaintenanceAgent()
+        self.vision_agent = VisionAgent(self.client)
         self.root_cause_agent = RootCauseAgent(self.client)
         self.critic_agent = CriticAgent(self.client)
         self.confidence_engine = ConfidenceEngine()
@@ -59,7 +62,7 @@ class InvestigationOrchestrator:
             "incident_id": inc_id,
             "agent": "TRIAGE_AGENT",
             "step": "STARTED",
-            "message": f"Triaging multimodal telemetry alert from {station_id}..."
+            "message": f"Triaging multimodal telemetry alert from {station_id} using Gemma..."
         }
 
         triage: TriageAssessment = await self.triage_agent.evaluate(snapshot)
@@ -81,39 +84,31 @@ class InvestigationOrchestrator:
         }
 
         evidence_data = await self.evidence_agent.collect_evidence(snapshot)
-        evidence_items = evidence_data["evidence_items"]
+        evidence_items = list(evidence_data["evidence_items"])
         matched_sops = evidence_data["matched_sops"]
 
-        yield {
-            "incident_id": inc_id,
-            "agent": "EVIDENCE_RAG_AGENT",
-            "step": "COMPLETED",
-            "evidence_count": len(evidence_items),
-            "critical_count": evidence_data["critical_count"],
-            "matched_sops_count": len(matched_sops),
-            "payload": {
-                "evidence_items": [e.model_dump() for e in evidence_items],
-                "matched_sops": matched_sops
-            }
-        }
-
         # -------------------------------------------------------------
-        # STEP 3: PARALLEL DOMAIN ANALYSIS
+        # STEP 3: PARALLEL DOMAIN & MULTIMODAL VISION ANALYSIS
         # -------------------------------------------------------------
         yield {
             "incident_id": inc_id,
             "agent": "DOMAIN_ANALYSIS",
             "step": "STARTED",
-            "message": "Executing parallel domain analysis (Kinematics, Quality Tolerances, Maintenance History)..."
+            "message": "Executing parallel domain analysis (Kinematics, Quality, Maintenance, and Qwen2.5-VL Vision Inspection)..."
         }
 
         telemetry_task = self.telemetry_agent.analyze(snapshot, evidence_items)
         quality_task = self.quality_agent.analyze(snapshot)
         maintenance_task = self.maintenance_agent.correlate(snapshot, evidence_items)
+        vision_task = self.vision_agent.evaluate(snapshot)
 
-        telemetry_res, quality_res, maintenance_res = await asyncio.gather(
-            telemetry_task, quality_task, maintenance_task
+        telemetry_res, quality_res, maintenance_res, vision_res = await asyncio.gather(
+            telemetry_task, quality_task, maintenance_task, vision_task
         )
+
+        # Merge any detected visual evidence into the empirical evidence list
+        for v_ev in vision_res.get("visual_evidence", []):
+            evidence_items.append(EvidenceItem.model_validate(v_ev))
 
         yield {
             "incident_id": inc_id,
@@ -122,7 +117,8 @@ class InvestigationOrchestrator:
             "payload": {
                 "telemetry": telemetry_res,
                 "quality": quality_res,
-                "maintenance": maintenance_res
+                "maintenance": maintenance_res,
+                "vision": vision_res
             }
         }
 
@@ -133,13 +129,13 @@ class InvestigationOrchestrator:
             "incident_id": inc_id,
             "agent": "ROOT_CAUSE_AGENT",
             "step": "STARTED",
-            "message": "Formulating ranked causal hypotheses grounded in empirical evidence..."
+            "message": "Formulating ranked causal hypotheses grounded in empirical evidence via Gemma..."
         }
 
         hypothesis: RootCauseHypothesis = await self.root_cause_agent.formulate_hypothesis(
             snapshot=snapshot,
             triage=triage,
-            evidence_data=evidence_data,
+            evidence_data={"evidence_items": evidence_items, "matched_sops": matched_sops},
             telemetry_data=telemetry_res,
             quality_data=quality_res,
             maintenance_data=maintenance_res
@@ -153,13 +149,13 @@ class InvestigationOrchestrator:
         }
 
         # -------------------------------------------------------------
-        # STEP 5: ADVERSARIAL CRITIC AGENT (FALSIFICATION LOOP)
+        # STEP 5: ADVERSARIAL CRITIC AGENT (CONSOLIDATED ON GEMMA)
         # -------------------------------------------------------------
         yield {
             "incident_id": inc_id,
             "agent": "CRITIC_AGENT",
             "step": "STARTED",
-            "message": f"Adversarial Critic testing hypothesis '{hypothesis.title}' for physical contradictions..."
+            "message": f"Adversarial Critic auditing hypothesis '{hypothesis.title}' for physical contradictions..."
         }
 
         critic_eval: CriticEvaluation = await self.critic_agent.evaluate_hypothesis(

@@ -64,6 +64,24 @@ class TireFitmentMetrics(BaseModel):
     clamp_engaged: bool = True
 
 
+class VisualDefectItem(BaseModel):
+    defect_id: str = Field(description="Unique visual defect identifier (e.g. VIS-001)")
+    location: str = Field(description="Physical machinery location in frame")
+    defect_type: str = Field(description="SURFACE_PITTING | FATIGUE_CRACK | SEAL_EXTRUSION | THERMAL_HOTSPOT | LUBRICANT_DEGRADATION")
+    bounding_box: List[int] = Field(default_factory=list, description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1000")
+    confidence: float = Field(default=85.0, description="Visual defect confidence percentage")
+    description: str = Field(description="Visual observation from Vision-Language Model")
+
+
+class MachineryImageFrame(BaseModel):
+    camera_id: str = Field(description="e.g. CAM_FLIR_IR_01, CAM_MACRO_OPTICAL_02")
+    image_type: str = Field(default="OPTICAL_MACRO", description="THERMAL_IR | OPTICAL_MACRO | RGB_CONTEXT")
+    image_base64: Optional[str] = Field(default=None, description="Base64 encoded JPEG payload")
+    image_url: Optional[str] = Field(default=None, description="Relative file path or URI")
+    min_temp_c: Optional[float] = Field(default=None, description="Radiometric thermal minimum scale")
+    max_temp_c: Optional[float] = Field(default=None, description="Radiometric thermal maximum scale")
+
+
 class MultimodalTelemetrySnapshot(BaseModel):
     timestamp: str = Field(description="ISO 8601 timestamp of sensor capture")
     station_id: str = Field(description="Identifier for robotic station")
@@ -73,6 +91,8 @@ class MultimodalTelemetrySnapshot(BaseModel):
     pneumatic_pressure_bar: float = Field(default=6.2, description="Gripper line pressure")
     thermal_hotspots: List[ThermalHotspot] = Field(default_factory=list)
     acoustic_anomalies: List[AcousticAnomaly] = Field(default_factory=list)
+    visual_defects: List[VisualDefectItem] = Field(default_factory=list)
+    image_frames: List[MachineryImageFrame] = Field(default_factory=list)
     tire_fitment: Optional[TireFitmentMetrics] = None
     e_stop_triggered: bool = False
     operator_shift_notes: Optional[str] = None

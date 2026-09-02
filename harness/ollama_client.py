@@ -1,6 +1,7 @@
+import os
 import json
 import logging
-from typing import Type, TypeVar, Optional, Dict, Any
+from typing import Type, TypeVar, Optional, Dict, Any, List
 import httpx
 from pydantic import BaseModel, ValidationError
 
@@ -9,15 +10,23 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class AsyncOllamaClient:
+    """
+    Asynchronous client for local Ollama models.
+    Default Text & Critic Reasoner: Google Gemma (e.g. gemma2:latest, gemma2:2b, gemma2:9b)
+    Default Vision Specialist: Qwen2.5-VL (e.g. qwen2.5-vl:7b, qwen2.5-vl:latest)
+    """
+
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
-        model: str = "qwen2.5:7b-instruct-q4_K_M",
+        model: Optional[str] = None,
+        vision_model: Optional[str] = None,
         timeout_sec: float = 45.0,
         mock_fallback: bool = True
     ):
         self.base_url = base_url.rstrip("/")
-        self.model = model
+        self.model = model or os.getenv("OLLAMA_MODEL", "gemma2:latest")
+        self.vision_model = vision_model or os.getenv("OLLAMA_VISION_MODEL", "qwen2.5-vl:latest")
         self.timeout_sec = timeout_sec
         self.mock_fallback = mock_fallback
 
@@ -33,19 +42,22 @@ class AsyncOllamaClient:
     async def generate_structured(
         self,
         prompt: str,
-        system_prompt: str,
+        system_instruction: str,
         schema_class: Type[T],
-        model_override: Optional[str] = None
+        model_override: Optional[str] = None,
+        image_base64: Optional[str] = None,
+        use_vision: bool = False
     ) -> T:
         """
         Executes local Ollama inference and strictly validates output into the target Pydantic schema.
+        Routes multimodal image tasks to the vision specialist (Qwen2.5-VL) and text reasoning to Gemma.
         Falls back to deterministic rule synthesis if Ollama is not running in offline environments.
         """
-        target_model = model_override or self.model
-        payload = {
+        target_model = model_override or (self.vision_model if use_vision else self.model)
+        payload: Dict[str, Any] = {
             "model": target_model,
             "prompt": prompt,
-            "system": system_prompt,
+            "system": system_instruction,
             "stream": False,
             "format": "json",
             "options": {
@@ -54,6 +66,9 @@ class AsyncOllamaClient:
                 "num_ctx": 4096
             }
         }
+
+        if use_vision and image_base64:
+            payload["images"] = [image_base64]
 
         try:
             async with httpx.AsyncClient(timeout=self.timeout_sec) as client:
@@ -78,11 +93,34 @@ class AsyncOllamaClient:
             TriageAssessment,
             RootCauseHypothesis,
             CriticEvaluation,
+            VisualDefectItem,
             IncidentDomain,
             IncidentSeverity
         )
 
         prompt_lower = prompt.lower()
+
+        # Fallback for Visual Defect Items
+        if schema_class == VisualDefectItem:
+            is_thermal = "thermal" in prompt_lower or "hotspot" in prompt_lower or "flir" in prompt_lower
+            if is_thermal:
+                return VisualDefectItem(
+                    defect_id="VIS-001",
+                    location="Joint_3_Harmonic_Housing",
+                    defect_type="THERMAL_HOTSPOT",
+                    bounding_box=[320, 440, 580, 720],
+                    confidence=94.5,
+                    description="Infrared thermography exhibits extreme localized heat emission > 85°C on wave generator casing."
+                )
+            else:
+                return VisualDefectItem(
+                    defect_id="VIS-002",
+                    location="Pneumatic_Gripper_Solenoid",
+                    defect_type="SEAL_EXTRUSION",
+                    bounding_box=[210, 310, 450, 590],
+                    confidence=88.0,
+                    description="Optical macro inspection indicates micro-tear and oil mist blow-by at manifold O-ring interface."
+                )
 
         # Fallback for Triage
         if schema_class == TriageAssessment:

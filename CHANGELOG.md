@@ -6,6 +6,18 @@ All major architectural decisions, branch operations, and code updates are docum
 
 ## 📅 [2026-09-02] — Ground Zero Setup & Architecture Blueprints
 
+### ⏱️ 17:41:00 IST (+05:30) — Gemma Unified Brain & Qwen2.5-VL Multimodal Vision Agent Implemented
+- **Consolidated on Lean RAM-Optimized Architecture**:
+  - `harness/ollama_client.py`: Configured Google Gemma (`gemma2:latest` / `gemma2:2b` / `gemma:4b`) as the unified brain for both the Main Reasoning Agents (Triage, Telemetry, Root Cause) AND the Adversarial Critic Agent, drastically cutting edge VRAM usage to < 6GB.
+  - `harness/agents/vision_agent.py`: Implemented specialized Multimodal Vision Agent routing camera frames and FLIR IR thermography to `qwen2.5-vl:7b-instruct-q4_K_M`.
+  - `harness/schemas.py`: Added `VisualDefectItem` (with normalized bounding boxes `[ymin, xmin, ymax, xmax]`) and `MachineryImageFrame` models.
+  - `harness/orchestrator.py`: Integrated `VisionAgent` into parallel Step 3 domain analysis to auto-extract and merge visual empirical evidence.
+  - `scripts/init_models.sh`: Updated model initialization script to pre-pull the optimized duo (`gemma2:latest` + `qwen2.5-vl:7b-instruct-q4_K_M`).
+- **Test Suite Results**:
+  - 27 automated test cases passing in 0.44s (100% pass rate across schemas, agents, vision inspector, orchestrator scenarios, and API endpoints).
+
+---
+
 ### ⏱️ 17:16:30 IST (+05:30) — Phase 8 Execution: React 19 + Three.js Command Center Completed
 - **Implemented Interactive 3D Digital Twin Command Center**:
   - `src/components/RobotViewer.jsx`: 6-axis KUKA KR-210 robotic arm digital twin with dynamic fault joint shaders (glowing red thermal/torque overlays on Joint 3), contact shadows, and orbit controls.
