@@ -1,0 +1,92 @@
+[
+  {
+    "id": "SOP-HARMONIC-001",
+    "title": "Joint 3 Harmonic Drive Gearbox Degradation & Thermal Seizure",
+    "component": "Joint_3",
+    "symptoms": [
+      "Motor casing temperature exceeding 80°C",
+      "High-frequency acoustic grind between 2.2 kHz and 3.5 kHz",
+      "Torque spikes during descent motion (> 300 Nm)"
+    ],
+    "causal_mechanism": "Lubrication breakdown leading to gear tooth micro-pitting and thermal expansion friction in the harmonic wave generator.",
+    "corrective_actions": [
+      "Lockout/Tagout (LOTO) Station",
+      "Inspect harmonic grease discoloration and metallic particulate count",
+      "Replace harmonic drive assembly if backlash exceeds 0.4 arcmin"
+    ],
+    "historical_occurrences": 3,
+    "last_revised": "2026-06-15"
+  },
+  {
+    "id": "SOP-PNEUMATIC-002",
+    "title": "Pneumatic Gripper Pressure Drop & Tire Bead Slip",
+    "component": "Pneumatic_Gripper",
+    "symptoms": [
+      "Line pressure dropping below 4.5 bar during clamping cycle",
+      "Acoustic hiss signature in 5.0 kHz - 6.5 kHz band",
+      "Tire bead seating offset exceeding 1.5 mm"
+    ],
+    "causal_mechanism": "Solenoid valve O-ring seal blow-by or quick-disconnect fitting micro-fracture under rapid cycle pressure pulses.",
+    "corrective_actions": [
+      "Perform acoustic bubble leak test on primary supply manifold",
+      "Replace valve manifold cartridge and verify supply regulator at 6.2 bar",
+      "Recalibrate gripper radial concentricity laser sensor"
+    ],
+    "historical_occurrences": 7,
+    "last_revised": "2026-07-20"
+  },
+  {
+    "id": "SOP-RESOLVER-003",
+    "title": "Encoder/Resolver Signal Noise & Kinematic Jitter",
+    "component": "Joint_2_Shoulder",
+    "symptoms": [
+      "Angular position jitter (> 0.2 deg fluctuation at rest)",
+      "Motor current oscillations without corresponding mechanical load",
+      "Normal temperature (< 55°C) and normal acoustic baseline"
+    ],
+    "causal_mechanism": "Resolver shield ground loop or loose M12 connector pin inducing EMI noise from adjacent servo drive inverter cables.",
+    "corrective_actions": [
+      "Check shield continuity to protective earth (PE < 0.1 ohm)",
+      "Inspect M12 connector pins for fretting corrosion",
+      "Reroute resolver cable with 200mm separation from 400V power conduit"
+    ],
+    "historical_occurrences": 2,
+    "last_revised": "2026-05-10"
+  },
+  {
+    "id": "SOP-ELECTRICAL-004",
+    "title": "3-Phase Line Voltage Sag & Servo Drive Undervoltage Trip",
+    "component": "Electrical_Power_Supply",
+    "symptoms": [
+      "3-phase line voltage dropping below 370V RMS",
+      "Simultaneous current spikes across all active joint axes",
+      "Emergency Stop trigger F3002 (DC Bus Undervoltage)"
+    ],
+    "causal_mechanism": "Main plant bus voltage sag triggered by heavy auxiliary load switching (e.g. nearby autoclave or compressor start).",
+    "corrective_actions": [
+      "Inspect main power transformer tap settings",
+      "Verify uninterruptible power supply (UPS) buffer capacitor bank health",
+      "Reset safety relay and verify 400V phase balance within ± 2%"
+    ],
+    "historical_occurrences": 4,
+    "last_revised": "2026-08-01"
+  },
+  {
+    "id": "SOP-THERMO-005",
+    "title": "Thermocouple Wire Degradation & False Overheat Readout",
+    "component": "Thermal_Sensor_Telemetry",
+    "symptoms": [
+      "Thermal sensor reporting > 90°C instant step-function jump",
+      "Motor current and torque remain completely normal and nominal",
+      "Acoustic audio signature shows healthy baseline (< 70 dB)"
+    ],
+    "causal_mechanism": "PT100/Type-K thermocouple lead wire pinch in cable track causing intermittent high-resistance short circuit, generating artificial temperature spikes while motor is physically cool.",
+    "corrective_actions": [
+      "Perform physical infrared thermometer spot-check on motor housing",
+      "Measure thermocouple resistance at terminal block (nominal ~110 ohms at room temp)",
+      "Replace flex cable harness through energy chain track"
+    ],
+    "historical_occurrences": 5,
+    "last_revised": "2026-08-18"
+  }
+]
