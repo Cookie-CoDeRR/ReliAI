@@ -1,0 +1,41 @@
+{
+  "scenario_id": "SCENARIO-02-PNEUMATIC-DROP",
+  "title": "Pneumatic Solenoid Seal Leak & Incomplete Tire Bead Seating",
+  "station_id": "STATION-TIRE-FITTER-01",
+  "description": "Gripper manifold supply pressure sags from 6.2 to 4.0 bar during clamping, causing 1.8mm bead eccentricity and ultrasonic air leak hissing at 5.2kHz.",
+  "expected_outcome": "CONCLUSIVE",
+  "expected_domain": "PNEUMATIC_PRESSURE_DROP",
+  "expected_component": "Pneumatic_Gripper_Assembly",
+  "snapshot": {
+    "timestamp": "2026-09-02T16:15:00Z",
+    "station_id": "STATION-TIRE-FITTER-01",
+    "joints": {
+      "Joint_1": { "joint_name": "Base Turntable", "angle_deg": 10.0, "velocity_deg_s": 0.0, "torque_nm": 80.0, "temp_c": 38.0, "motor_current_a": 1.8 },
+      "Joint_2": { "joint_name": "Shoulder Pitch", "angle_deg": 25.0, "velocity_deg_s": 0.0, "torque_nm": 190.0, "temp_c": 42.0, "motor_current_a": 3.0 },
+      "Joint_3": { "joint_name": "Elbow Pitch", "angle_deg": 65.0, "velocity_deg_s": 0.0, "torque_nm": 140.0, "temp_c": 41.0, "motor_current_a": 2.5 },
+      "Joint_4": { "joint_name": "Wrist Roll", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 45.0, "temp_c": 35.0, "motor_current_a": 1.0 },
+      "Joint_5": { "joint_name": "Wrist Pitch", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 40.0, "temp_c": 34.0, "motor_current_a": 0.9 },
+      "Joint_6": { "joint_name": "Tool Flange", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 30.0, "temp_c": 33.0, "motor_current_a": 0.7 }
+    },
+    "line_voltage_v": 401.0,
+    "total_current_a": 9.9,
+    "pneumatic_pressure_bar": 4.0,
+    "thermal_hotspots": [],
+    "acoustic_anomalies": [
+      {
+        "frequency_hz": 5200.0,
+        "magnitude_db": 78.0,
+        "pattern_type": "VALVE_HISS",
+        "is_abnormal": true
+      }
+    ],
+    "tire_fitment": {
+      "bead_seating_offset_mm": 1.8,
+      "angular_misalignment_deg": 0.45,
+      "torque_at_seating_nm": 95.0,
+      "clamp_engaged": true
+    },
+    "e_stop_triggered": false,
+    "operator_shift_notes": "Tire bead seated with visible radial wobble; quality laser inspection gauge rejected the assembly."
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "scenario_id": "SCENARIO-03-CONTRADICTORY-FAULT",
+  "title": "Thermocouple Wire Short & False Overheat Readout (Anti-Hallucination Test)",
+  "station_id": "STATION-TIRE-FITTER-01",
+  "description": "Thermocouple reports an abrupt 92°C thermal spike, yet motor current is completely idle/nominal (3.1A) and acoustic baseline is silent (0 dB). Tests anti-hallucination refusal.",
+  "expected_outcome": "INCONCLUSIVE_CONTRADICTIONS",
+  "expected_domain": "THERMAL_OVERHEAT",
+  "expected_component": "Thermal_Sensor_Telemetry",
+  "snapshot": {
+    "timestamp": "2026-09-02T16:30:00Z",
+    "station_id": "STATION-TIRE-FITTER-01",
+    "joints": {
+      "Joint_1": { "joint_name": "Base Turntable", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 110.0, "temp_c": 40.0, "motor_current_a": 2.4 },
+      "Joint_2": { "joint_name": "Shoulder Pitch", "angle_deg": 30.0, "velocity_deg_s": 0.0, "torque_nm": 220.0, "temp_c": 45.0, "motor_current_a": 3.6 },
+      "Joint_3": { "joint_name": "Elbow Pitch", "angle_deg": 80.0, "velocity_deg_s": 0.0, "torque_nm": 190.0, "temp_c": 92.0, "motor_current_a": 3.1 },
+      "Joint_4": { "joint_name": "Wrist Roll", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 50.0, "temp_c": 36.0, "motor_current_a": 1.1 },
+      "Joint_5": { "joint_name": "Wrist Pitch", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 42.0, "temp_c": 35.0, "motor_current_a": 1.0 },
+      "Joint_6": { "joint_name": "Tool Flange", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 32.0, "temp_c": 33.0, "motor_current_a": 0.8 }
+    },
+    "line_voltage_v": 400.0,
+    "total_current_a": 12.0,
+    "pneumatic_pressure_bar": 6.2,
+    "thermal_hotspots": [
+      {
+        "location": "Joint 3 Thermal Sensor Point",
+        "temp_c": 92.0,
+        "delta_ambient_c": 67.0,
+        "severity": "CRITICAL"
+      }
+    ],
+    "acoustic_anomalies": [],
+    "tire_fitment": {
+      "bead_seating_offset_mm": 0.28,
+      "angular_misalignment_deg": 0.08,
+      "torque_at_seating_nm": 125.0,
+      "clamp_engaged": true
+    },
+    "e_stop_triggered": false,
+    "operator_shift_notes": "Operator touched motor housing physically; casing feels cool to touch despite software displaying 92°C red alert."
+  }
+}

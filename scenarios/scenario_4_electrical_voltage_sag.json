@@ -1,0 +1,34 @@
+{
+  "scenario_id": "SCENARIO-04-VOLTAGE-SAG",
+  "title": "3-Phase Power Undervoltage Sag & Synchronous Servo Drive Trip",
+  "station_id": "STATION-TIRE-FITTER-01",
+  "description": "Grid voltage drops to 365V RMS under heavy plant transformer load, triggering synchronous multi-axis current surges and DC bus undervoltage emergency stop.",
+  "expected_outcome": "CONCLUSIVE",
+  "expected_domain": "ELECTRICAL_POWER_SAG",
+  "expected_component": "Electrical_Power_Supply",
+  "snapshot": {
+    "timestamp": "2026-09-02T16:45:00Z",
+    "station_id": "STATION-TIRE-FITTER-01",
+    "joints": {
+      "Joint_1": { "joint_name": "Base Turntable", "angle_deg": 22.0, "velocity_deg_s": 0.0, "torque_nm": 140.0, "temp_c": 44.0, "motor_current_a": 5.9 },
+      "Joint_2": { "joint_name": "Shoulder Pitch", "angle_deg": 40.0, "velocity_deg_s": 0.0, "torque_nm": 290.0, "temp_c": 48.0, "motor_current_a": 7.4 },
+      "Joint_3": { "joint_name": "Elbow Pitch", "angle_deg": 70.0, "velocity_deg_s": 0.0, "torque_nm": 210.0, "temp_c": 46.0, "motor_current_a": 6.8 },
+      "Joint_4": { "joint_name": "Wrist Roll", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 60.0, "temp_c": 38.0, "motor_current_a": 2.8 },
+      "Joint_5": { "joint_name": "Wrist Pitch", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 50.0, "temp_c": 36.0, "motor_current_a": 2.4 },
+      "Joint_6": { "joint_name": "Tool Flange", "angle_deg": 0.0, "velocity_deg_s": 0.0, "torque_nm": 40.0, "temp_c": 35.0, "motor_current_a": 1.9 }
+    },
+    "line_voltage_v": 365.0,
+    "total_current_a": 27.2,
+    "pneumatic_pressure_bar": 6.2,
+    "thermal_hotspots": [],
+    "acoustic_anomalies": [],
+    "tire_fitment": {
+      "bead_seating_offset_mm": 0.30,
+      "angular_misalignment_deg": 0.10,
+      "torque_at_seating_nm": 120.0,
+      "clamp_engaged": true
+    },
+    "e_stop_triggered": true,
+    "operator_shift_notes": "Main substation transformer switched during compressor start, lighting flickered on plant floor, robot halted with code F3002 (Undervoltage)."
+  }
+}

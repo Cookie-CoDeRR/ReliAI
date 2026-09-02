@@ -1,0 +1,90 @@
+{
+  "scenario_id": "SCENARIO-01-THERMAL-OVERHEAT",
+  "title": "Joint 3 Harmonic Drive Lubricant Breakdown & Thermal Overheat",
+  "station_id": "STATION-TIRE-FITTER-01",
+  "description": "Elbow axis joint 3 exhibits severe thermal runaway (88.5°C) and torque saturation during descent motion, accompanied by 2.8kHz mechanical grinding harmonics.",
+  "expected_outcome": "CONCLUSIVE",
+  "expected_domain": "THERMAL_OVERHEAT",
+  "expected_component": "Joint_3_Elbow",
+  "snapshot": {
+    "timestamp": "2026-09-02T16:00:00Z",
+    "station_id": "STATION-TIRE-FITTER-01",
+    "joints": {
+      "Joint_1": {
+        "joint_name": "Base Turntable",
+        "angle_deg": 45.0,
+        "velocity_deg_s": 15.0,
+        "torque_nm": 130.0,
+        "temp_c": 44.0,
+        "motor_current_a": 2.9
+      },
+      "Joint_2": {
+        "joint_name": "Shoulder Pitch",
+        "angle_deg": 35.0,
+        "velocity_deg_s": 8.0,
+        "torque_nm": 260.0,
+        "temp_c": 51.0,
+        "motor_current_a": 4.1
+      },
+      "Joint_3": {
+        "joint_name": "Elbow Pitch",
+        "angle_deg": 85.0,
+        "velocity_deg_s": 4.5,
+        "torque_nm": 345.0,
+        "temp_c": 88.5,
+        "motor_current_a": 7.8
+      },
+      "Joint_4": {
+        "joint_name": "Wrist Roll",
+        "angle_deg": 12.0,
+        "velocity_deg_s": 10.0,
+        "torque_nm": 65.0,
+        "temp_c": 42.0,
+        "motor_current_a": 1.4
+      },
+      "Joint_5": {
+        "joint_name": "Wrist Pitch",
+        "angle_deg": -18.0,
+        "velocity_deg_s": 6.0,
+        "torque_nm": 55.0,
+        "temp_c": 40.0,
+        "motor_current_a": 1.2
+      },
+      "Joint_6": {
+        "joint_name": "Tool Flange",
+        "angle_deg": 0.0,
+        "velocity_deg_s": 0.0,
+        "torque_nm": 35.0,
+        "temp_c": 38.0,
+        "motor_current_a": 0.9
+      }
+    },
+    "line_voltage_v": 399.5,
+    "total_current_a": 18.3,
+    "pneumatic_pressure_bar": 6.2,
+    "thermal_hotspots": [
+      {
+        "location": "Joint 3 Harmonic Gearbox",
+        "temp_c": 88.5,
+        "delta_ambient_c": 63.5,
+        "severity": "CRITICAL"
+      }
+    ],
+    "acoustic_anomalies": [
+      {
+        "frequency_hz": 2800.0,
+        "magnitude_db": 86.0,
+        "pattern_type": "BEARING_GRIND",
+        "is_abnormal": true
+      }
+    ],
+    "tire_fitment": {
+      "bead_seating_offset_mm": 0.35,
+      "angular_misalignment_deg": 0.12,
+      "torque_at_seating_nm": 124.0,
+      "clamp_engaged": true
+    },
+    "e_stop_triggered": true,
+    "operator_shift_notes": "Emergency stop triggered automatically due to Joint 3 over-temperature alarm (Code E-308)."
+  }
+}

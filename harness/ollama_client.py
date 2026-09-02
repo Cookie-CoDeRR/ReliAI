@@ -92,7 +92,8 @@ class AsyncOllamaClient:
                 or "pneumatic_pressure_bar: 3" in prompt_lower
                 or "valve_hiss" in prompt_lower
                 or "pressure dropped" in prompt_lower
-                or "bead_seating_offset" in prompt_lower
+                or "bead_seating_offset_mm: 1." in prompt_lower
+                or "bead_seating_offset_mm: 2." in prompt_lower
             ):
                 domain = IncidentDomain.PNEUMATIC_PRESSURE_DROP
             elif (

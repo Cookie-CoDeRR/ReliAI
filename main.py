@@ -2,6 +2,7 @@ import json
 import asyncio
 import logging
 from typing import Dict, Any, Optional
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,14 +13,27 @@ from harness.schemas import (
 from harness.orchestrator import InvestigationOrchestrator
 from harness.ollama_client import AsyncOllamaClient
 from harness.baseline_engine import BaselineEngine
+from web_backend.database import init_db
+from web_backend.router import router as web_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("reliai-harness")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: initialize database tables
+    logger.info("Initializing SQLite/PostgreSQL database tables...")
+    await init_db()
+    logger.info("ReliAI Platform ready.")
+    yield
+
+
 app = FastAPI(
     title="ReliAI — Industrial AI Investigation Harness Service",
     description="Autonomous Multi-Agent Investigation Engine with Adversarial Anti-Hallucination Critic Loop",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 # Enable CORS for local and factory dashboard web clients
@@ -30,6 +44,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount Web Platform REST Router (/api/v1)
+app.include_router(web_router)
 
 # Singleton service instances
 ollama_client = AsyncOllamaClient()

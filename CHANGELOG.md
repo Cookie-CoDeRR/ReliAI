@@ -6,6 +6,22 @@ All major architectural decisions, branch operations, and code updates are docum
 
 ## 📅 [2026-09-02] — Ground Zero Setup & Architecture Blueprints
 
+### ⏱️ 17:12:00 IST (+05:30) — Web Platform Backend, Database Persistence & Scenario Presets Completed
+- **Implemented Industrial Scenario Presets** (`scenarios/`):
+  - `scenario_1_joint3_thermal_overheat.json`: 88.5°C thermal runaway with torque saturation and 2.8kHz acoustic harmonics.
+  - `scenario_2_pneumatic_gripper_drop.json`: Gripper pressure drop to 4.0 bar with 1.8mm bead seating offset.
+  - `scenario_3_contradictory_sensor_fault.json`: 92°C false thermocouple overheat with nominal current and silent acoustics.
+  - `scenario_4_electrical_voltage_sag.json`: 3-Phase line voltage sag to 365V RMS.
+- **Implemented Async Database Persistence** (`web_backend/`):
+  - `database.py`: Async SQLAlchemy engine with SQLite/PostgreSQL support.
+  - `models.py`: `IncidentRecord`, `AgentTraceRecord`, and `ApprovalAuditRecord` models.
+  - `service.py`: Incident ingestion, full multi-agent investigation execution with trace recording, and human-in-the-loop authorization logging.
+  - `router.py`: REST API router mounted under `/api/v1/` (`/scenarios`, `/scenarios/{id}/trigger`, `/incidents/ingest`, `/incidents`, `/incidents/{id}`, `/incidents/{id}/investigate`, `/incidents/{id}/approve`).
+- **Test Suite Results**:
+  - 25 automated test cases passing in 0.45s (100% pass rate across schemas, agents, orchestrator scenarios, FastAPI endpoints, database persistence, and human authorization lifecycle).
+
+---
+
 ### ⏱️ 17:04:30 IST (+05:30) — Phases 3, 4, 5 & 6 Execution (Agents, Critic Loop, Orchestrator & REST/SSE Service)
 - **Implemented Specialized Autonomous Agents**:
   - `harness/agents/triage_agent.py`: Multimodal ingestion, domain categorization, severity calculation.
