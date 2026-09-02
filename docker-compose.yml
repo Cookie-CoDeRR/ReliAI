@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  # Local Ollama Inference Host
+  ollama:
+    image: ollama/ollama:latest
+    container_name: reliai-ollama
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_KEEP_ALIVE=24h
+    networks:
+      - reliai-net
+
+  # Python Uvicorn Investigation Harness Service
+  ai-harness:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: reliai-ai-harness
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    networks:
+      - reliai-net
+
+volumes:
+  ollama_models:
+
+networks:
+  reliai-net:
+    driver: bridge

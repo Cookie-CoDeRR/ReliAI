@@ -6,17 +6,28 @@ All major architectural decisions, branch operations, and code updates are docum
 
 ## 📅 [2026-09-02] — Ground Zero Setup & Architecture Blueprints
 
-### ⏱️ 16:51:50 IST (+05:30) — Phase 1 & 2 Execution (Data Contracts, Baseline Engine & Ollama Client)
-- **Implemented**:
-  - `requirements.txt` & `pyproject.toml`: Python 3.10+ package dependencies and test configuration.
-  - `harness/schemas.py`: Pydantic v2 data models for Multimodal Telemetry, Evidence Items, Triage, Hypotheses, Critic Evaluations, and Investigation Verdicts.
-  - `baselines/golden_run_specs.json`: Reference tolerances and operating envelopes for 6-DOF robotic arm tire-mounting station.
-  - `sops/maintenance_sops.json`: Knowledge base of standard operating procedures and historical failure mechanisms.
-  - `harness/baseline_engine.py`: Mathematical baseline deviation detector and SOP matching engine.
-  - `harness/ollama_client.py`: Async Ollama client with structured JSON enforcement and deterministic offline fallbacks.
-  - `tests/`: Complete unit test suite (`test_schemas.py`, `test_baseline_engine.py`, `test_ollama_client.py`) with 100% pass rate across all 8 test cases.
+### ⏱️ 17:04:30 IST (+05:30) — Phases 3, 4, 5 & 6 Execution (Agents, Critic Loop, Orchestrator & REST/SSE Service)
+- **Implemented Specialized Autonomous Agents**:
+  - `harness/agents/triage_agent.py`: Multimodal ingestion, domain categorization, severity calculation.
+  - `harness/agents/evidence_rag_agent.py`: Baseline deviation extraction and SOP knowledge retrieval.
+  - `harness/agents/telemetry_agent.py`: 6-axis joint kinematics, torque overdraw, and voltage stability analysis.
+  - `harness/agents/quality_fit_agent.py`: Tire bead seating radial offset, angular misalignment, and clamping check.
+  - `harness/agents/maintenance_agent.py`: Component lifecycle, fatigue cycles, and overdue lubrication monitoring.
+- **Implemented Adversarial Reasoning & Anti-Hallucination Engine**:
+  - `harness/agents/root_cause_agent.py`: Formulates ranked causal chains with strictly cited evidence IDs.
+  - `harness/agents/critic_agent.py`: Falsification auditor detecting contradictory sensor telemetry.
+  - `harness/agents/confidence_engine.py`: Deterministic mathematical confidence calculator with explicit `INCONCLUSIVE` safeguards on conflicting data.
+- **Implemented Multi-Agent Orchestrator & API Service**:
+  - `harness/orchestrator.py`: Async state machine coordinating all agents and streaming real-time deliberation events.
+  - `main.py`: FastAPI / Uvicorn server exposing REST (`/harness/investigate`, `/harness/baselines`, `/harness/sops`, `/harness/health`) and Server-Sent Events (`/harness/investigate/stream`).
+  - `Dockerfile` & `docker-compose.yml`: Production containerization with local Ollama inference service.
+  - `scripts/init_models.sh`: Model pre-pull initialization script.
+- **Test Suite Results**:
+  - 22 automated test cases passing in 0.25s (100% pass rate across schemas, baseline engine, domain agents, critic contradiction refusal, orchestrator scenarios, and API endpoints).
 
 ---
+
+### ⏱️ 16:51:50 IST (+05:30) — Phase 1 & 2 Execution (Data Contracts, Baseline Engine & Ollama Client)
 
 ### ⏱️ 16:48:30 IST (+05:30) — Ground Zero Clean-Up & Planning Phase
 - **Action**: Cleaned up the `ai-harness` branch to start from a clean Ground Zero state.

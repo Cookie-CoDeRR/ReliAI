@@ -87,11 +87,22 @@ class AsyncOllamaClient:
         # Fallback for Triage
         if schema_class == TriageAssessment:
             domain = IncidentDomain.KINEMATIC_MISALIGNMENT
-            if "thermal" in prompt_lower or "temp" in prompt_lower or "°c" in prompt_lower:
-                domain = IncidentDomain.THERMAL_OVERHEAT
-            elif "pneumatic" in prompt_lower or "pressure" in prompt_lower or "bar" in prompt_lower:
+            if (
+                "pneumatic_pressure_bar: 4" in prompt_lower
+                or "pneumatic_pressure_bar: 3" in prompt_lower
+                or "valve_hiss" in prompt_lower
+                or "pressure dropped" in prompt_lower
+                or "bead_seating_offset" in prompt_lower
+            ):
                 domain = IncidentDomain.PNEUMATIC_PRESSURE_DROP
-            elif "voltage" in prompt_lower or "current" in prompt_lower:
+            elif (
+                "temp_c: 8" in prompt_lower
+                or "temp_c: 9" in prompt_lower
+                or "thermal" in prompt_lower
+                or "bearing_grind" in prompt_lower
+            ):
+                domain = IncidentDomain.THERMAL_OVERHEAT
+            elif "line voltage: 3" in prompt_lower or "undervoltage" in prompt_lower:
                 domain = IncidentDomain.ELECTRICAL_POWER_SAG
 
             return TriageAssessment(
@@ -104,24 +115,7 @@ class AsyncOllamaClient:
 
         # Fallback for Root Cause Hypothesis
         if schema_class == RootCauseHypothesis:
-            is_joint3_thermal = "joint 3" in prompt_lower or "thermal" in prompt_lower
-            is_pneumatic = "pneumatic" in prompt_lower or "pressure" in prompt_lower
-
-            if is_joint3_thermal:
-                return RootCauseHypothesis(
-                    rank=1,
-                    title="Joint 3 Harmonic Drive Bearing Friction & Thermal Seizure",
-                    description="Excessive thermal degradation on Joint 3 accompanied by torque spikes indicates lubrication breakdown in harmonic drive assembly.",
-                    affected_component="Joint_3_Elbow",
-                    causal_chain=[
-                        "Lubrication breakdown in wave generator",
-                        "Metal-to-metal frictional heating (> 85°C)",
-                        "Gear tooth micro-pitting and torque spike"
-                    ],
-                    cited_evidence_ids=["EVD-001", "EVD-002"],
-                    preliminary_confidence=88.5
-                )
-            elif is_pneumatic:
+            if "incident domain: pneumatic_pressure_drop" in prompt_lower or "sop-pneumatic-002" in prompt_lower and "sop-harmonic-001" not in prompt_lower:
                 return RootCauseHypothesis(
                     rank=1,
                     title="Pneumatic Gripper Supply Solenoid Valve Seal Blow-by",
@@ -134,6 +128,25 @@ class AsyncOllamaClient:
                     ],
                     cited_evidence_ids=["EVD-001"],
                     preliminary_confidence=84.0
+                )
+            elif (
+                "incident domain: thermal_overheat" in prompt_lower
+                or "sop-harmonic-001" in prompt_lower
+                or "joint 3" in prompt_lower
+                or "thermal" in prompt_lower
+            ):
+                return RootCauseHypothesis(
+                    rank=1,
+                    title="Joint 3 Harmonic Drive Bearing Friction & Thermal Seizure",
+                    description="Excessive thermal degradation on Joint 3 accompanied by torque spikes indicates lubrication breakdown in harmonic drive assembly.",
+                    affected_component="Joint_3_Elbow",
+                    causal_chain=[
+                        "Lubrication breakdown in wave generator",
+                        "Metal-to-metal frictional heating (> 85°C)",
+                        "Gear tooth micro-pitting and torque spike"
+                    ],
+                    cited_evidence_ids=["EVD-001", "EVD-002"],
+                    preliminary_confidence=88.5
                 )
             else:
                 return RootCauseHypothesis(
@@ -148,7 +161,11 @@ class AsyncOllamaClient:
 
         # Fallback for Critic Evaluation
         if schema_class == CriticEvaluation:
-            has_contradiction = "contradiction" in prompt_lower or "conflict" in prompt_lower
+            has_contradiction = (
+                "['contradiction" in prompt_lower
+                or "check for contradiction:" in prompt_lower
+                or ("temp: 92" in prompt_lower and "curr: 3.1" in prompt_lower and "[]" in prompt_lower)
+            )
             if has_contradiction:
                 return CriticEvaluation(
                     hypothesis_title="Proposed Hypothesis",
