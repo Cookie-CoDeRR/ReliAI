@@ -38,6 +38,8 @@ class TriageAgent:
         - Line Voltage: {snapshot.line_voltage_v} V (Nominal: 400V)
         - Total Current: {snapshot.total_current_a} A (Nominal: 14.5A)
         - Pneumatic Gripper Pressure: {snapshot.pneumatic_pressure_bar} bar (Nominal: 6.2 bar)
+        - Conveyor Line: {snapshot.conveyor.model_dump() if snapshot.conveyor else 'Nominal'}
+        - Bead Lubrication System: {snapshot.bead_lubrication.model_dump() if snapshot.bead_lubrication else 'Nominal'}
         - Thermal Hotspots: {top_hotspots}
         - Acoustic Anomalies: {top_acoustics}
         - Joint Temperatures & Torques: {joint_summary}
@@ -49,10 +51,10 @@ class TriageAgent:
 
         Task:
         Provide a structured TriageAssessment with fields:
-        - incident_domain (THERMAL_OVERHEAT | KINEMATIC_MISALIGNMENT | ELECTRICAL_POWER_SAG | ACOUSTIC_BEARING_FAULT | PNEUMATIC_PRESSURE_DROP | QUALITY_BEAD_DEFECT)
+        - incident_domain (THERMAL_OVERHEAT | KINEMATIC_MISALIGNMENT | ELECTRICAL_POWER_SAG | ACOUSTIC_BEARING_FAULT | PNEUMATIC_PRESSURE_DROP | QUALITY_BEAD_DEFECT | CONVEYOR_BELT_SLIP | BEAD_LUBRICATION_FAILURE)
         - severity (CRITICAL | HIGH | MEDIUM | LOW)
         - summary (Concise explanation of the alert)
-        - immediate_containment_action (e.g. LOTO Station, Clear cell, Check manifold)
+        - immediate_containment_action (e.g. LOTO Station, Clear cell, Check manifold, Inspect lube nozzle)
         - active_investigation_paths (List of specific areas downstream agents must investigate)
         """
 

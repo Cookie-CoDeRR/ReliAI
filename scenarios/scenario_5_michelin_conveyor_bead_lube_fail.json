@@ -1,0 +1,108 @@
+{
+  "scenario_id": "SCENARIO-05-MICHELIN-CONVEYOR-LUBE-FAIL",
+  "title": "Michelin Conveyor Line 3: Bead Lube Nozzle Clog & Dry-Friction Seating Offset",
+  "description": "Infeed conveyor belt tension drop combined with automated spray nozzle clog leads to dry rubber-on-rim friction, excessive mounting torque, and 1.55mm laser bead seating offset.",
+  "expected_outcome": "CONCLUSIVE",
+  "snapshot": {
+    "timestamp": "2026-09-02T18:15:00Z",
+    "station_id": "MICHELIN-CLERMONT-LINE03-FITTER01",
+    "tire_metadata": {
+      "tire_rfid_epc": "urn:epc:id:sgtin:0086691.012345.10001",
+      "tire_sku": "Michelin Pilot Sport 5 225/45 R17 91W",
+      "rim_spec": "17x7.5J ET45 5x112",
+      "dot_code": "DOT 6X 7Y 0126"
+    },
+    "conveyor": {
+      "belt_speed_mps": 0.28,
+      "belt_tension_n": 215.0,
+      "vfd_frequency_hz": 50.0,
+      "vfd_current_a": 4.9,
+      "infeed_photoeye_blocked": true,
+      "outfeed_photoeye_blocked": false
+    },
+    "bead_lubrication": {
+      "nozzle_pressure_bar": 1.65,
+      "lube_flow_rate_lpm": 0.12,
+      "lube_tank_level_pct": 74.0,
+      "nozzle_clog_detected": true
+    },
+    "joints": {
+      "Joint_1": {
+        "joint_name": "Base Turntable",
+        "angle_deg": 18.2,
+        "velocity_deg_s": 12.0,
+        "torque_nm": 95.0,
+        "temp_c": 44.5,
+        "motor_current_a": 2.8
+      },
+      "Joint_2": {
+        "joint_name": "Shoulder Pitch",
+        "angle_deg": -32.5,
+        "velocity_deg_s": 8.5,
+        "torque_nm": 210.0,
+        "temp_c": 51.0,
+        "motor_current_a": 4.1
+      },
+      "Joint_3": {
+        "joint_name": "Elbow Pitch",
+        "angle_deg": -58.0,
+        "velocity_deg_s": 14.2,
+        "torque_nm": 185.0,
+        "temp_c": 53.5,
+        "motor_current_a": 3.9
+      },
+      "Joint_4": {
+        "joint_name": "Wrist Roll",
+        "angle_deg": 0.0,
+        "velocity_deg_s": 0.0,
+        "torque_nm": 45.0,
+        "temp_c": 42.0,
+        "motor_current_a": 1.4
+      },
+      "Joint_5": {
+        "joint_name": "Wrist Pitch",
+        "angle_deg": 22.0,
+        "velocity_deg_s": 5.0,
+        "torque_nm": 65.0,
+        "temp_c": 43.5,
+        "motor_current_a": 1.7
+      },
+      "Joint_6": {
+        "joint_name": "Tool Flange / Gripper",
+        "angle_deg": 90.0,
+        "velocity_deg_s": 0.0,
+        "torque_nm": 145.0,
+        "temp_c": 52.0,
+        "motor_current_a": 3.1
+      }
+    },
+    "line_voltage_v": 398.2,
+    "total_current_a": 16.8,
+    "pneumatic_pressure_bar": 6.1,
+    "thermal_hotspots": [],
+    "acoustic_anomalies": [],
+    "visual_defects": [
+      {
+        "defect_id": "VIS-MICHELIN-001",
+        "location": "Bead_Lubrication_Spray_Header",
+        "defect_type": "BEAD_CHAFE",
+        "bounding_box": [340, 410, 560, 680],
+        "confidence": 92.0,
+        "description": "Optical macro camera detects dry rubber bead chafing against rim flange with absence of soap/water lubricant wetting."
+      }
+    ],
+    "image_frames": [],
+    "tire_fitment": {
+      "bead_seating_offset_mm": 1.55,
+      "angular_misalignment_deg": 0.48,
+      "torque_at_seating_nm": 145.0,
+      "clamp_engaged": true,
+      "inflation_burst_pressure_bar": 4.6,
+      "bead_pop_detected": false,
+      "radial_runout_mm": 1.25,
+      "lateral_runout_mm": 0.95
+    },
+    "e_stop_triggered": false,
+    "operator_shift_notes": "Line 3 automated bead lube spray stopped atomizing soap solution. Bead seating offset exceeded 1.5mm threshold on Michelin Pilot Sport batches."
+  }
+}

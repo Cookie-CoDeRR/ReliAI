@@ -22,9 +22,9 @@
     "title": "Pneumatic Gripper Pressure Drop & Tire Bead Slip",
     "component": "Pneumatic_Gripper",
     "symptoms": [
-      "Line pressure dropping below 4.5 bar during clamping cycle",
-      "Acoustic hiss signature in 5.0 kHz - 6.5 kHz band",
-      "Tire bead seating offset exceeding 1.5 mm"
+      "Pneumatic pressure dropped below 5.5 bar during clamping cycle",
+      "High-frequency pneumatic air escape hiss at 5.0 kHz - 6.5 kHz",
+      "Insufficient gripper clamping force on wheel rim"
     ],
     "causal_mechanism": "Solenoid valve O-ring seal blow-by or quick-disconnect fitting micro-fracture under rapid cycle pressure pulses.",
     "corrective_actions": [
@@ -88,5 +88,41 @@
     ],
     "historical_occurrences": 5,
     "last_revised": "2026-08-18"
+  },
+  {
+    "id": "SOP-LUBE-006",
+    "title": "Bead Lubrication Atomizer Nozzle Clog & Dry Seating Friction",
+    "component": "Bead_Lubrication_System",
+    "symptoms": [
+      "Lubrication delivery anomaly with nozzle pressure below 2.0 bar",
+      "Spray atomizer nozzle tip clog detected",
+      "Dry rubber bead chafing against rim flange without soap wetting"
+    ],
+    "causal_mechanism": "Dried soap/polymer lubricant residue clogging the 0.8mm spray atomizer tip, preventing uniform bead wetting before rim press-down.",
+    "corrective_actions": [
+      "Flush lubrication delivery line with warm demineralized water cycle",
+      "Clean or replace spray atomizer nozzle tip (0.8mm carbide)",
+      "Verify tank reservoir fluid level and purge air bubbles from supply metering pump"
+    ],
+    "historical_occurrences": 6,
+    "last_revised": "2026-08-25"
+  },
+  {
+    "id": "SOP-CONVEYOR-007",
+    "title": "Infeed Conveyor Belt Slip & Timing Position Misalignment",
+    "component": "Infeed_Conveyor",
+    "symptoms": [
+      "Conveyor belt speed slowed below 0.35 m/s",
+      "Conveyor belt tension dropped below 240 N",
+      "Belt slippage on drive pulley"
+    ],
+    "causal_mechanism": "Tensioner roller spring fatigue or belt backside oil contamination causing mechanical slip on the drive pulley.",
+    "corrective_actions": [
+      "Adjust pneumatic/mechanical take-up tensioner to 320 N specification",
+      "Clean drive pulley lagging with degreasing agent",
+      "Inspect optical photoeye reflector alignment and clean sensor lens"
+    ],
+    "historical_occurrences": 3,
+    "last_revised": "2026-08-29"
   }
 ]

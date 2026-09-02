@@ -18,6 +18,8 @@ class IncidentDomain(str, Enum):
     ACOUSTIC_BEARING_FAULT = "ACOUSTIC_BEARING_FAULT"
     PNEUMATIC_PRESSURE_DROP = "PNEUMATIC_PRESSURE_DROP"
     QUALITY_BEAD_DEFECT = "QUALITY_BEAD_DEFECT"
+    CONVEYOR_BELT_SLIP = "CONVEYOR_BELT_SLIP"
+    BEAD_LUBRICATION_FAILURE = "BEAD_LUBRICATION_FAILURE"
 
 
 class InvestigationStatus(str, Enum):
@@ -67,8 +69,31 @@ class ThermalHotspot(BaseModel):
 class AcousticAnomaly(BaseModel):
     frequency_hz: float = Field(description="Peak harmonic frequency detected via FFT")
     magnitude_db: float = Field(description="Signal magnitude in decibels")
-    pattern_type: str = Field(description="e.g. BEARING_GRIND, VALVE_HISS, RESONANCE_HUM")
+    pattern_type: str = Field(description="e.g. BEARING_GRIND, VALVE_HISS, RESONANCE_HUM, BEAD_SEAT_SNAP")
     is_abnormal: bool = True
+
+
+class TireMetadata(BaseModel):
+    tire_rfid_epc: Optional[str] = Field(default=None, description="ISO 20910 RFID EPC (e.g. urn:epc:id:sgtin:0086691.012345.10001)")
+    tire_sku: str = Field(default="Michelin Pilot Sport 5 225/45 R17 91W", description="Tire model and dimension")
+    rim_spec: str = Field(default="17x7.5J ET45 5x112", description="Wheel rim geometry")
+    dot_code: Optional[str] = Field(default="DOT 6X 7Y 0126", description="Tire DOT manufacturing serial number")
+
+
+class ConveyorTelemetry(BaseModel):
+    belt_speed_mps: float = Field(default=0.5, description="Conveyor belt linear speed in meters/second")
+    belt_tension_n: float = Field(default=320.0, description="Conveyor load cell tension in Newtons")
+    vfd_frequency_hz: float = Field(default=50.0, description="VFD inverter frequency")
+    vfd_current_a: float = Field(default=3.2, description="Conveyor motor current draw")
+    infeed_photoeye_blocked: bool = Field(default=True, description="Tire present at infeed station")
+    outfeed_photoeye_blocked: bool = Field(default=False, description="Tire reached outfeed station")
+
+
+class BeadLubricationTelemetry(BaseModel):
+    nozzle_pressure_bar: float = Field(default=3.5, description="Soap/lubricant spray atomization pressure in bar")
+    lube_flow_rate_lpm: float = Field(default=0.45, description="Flow rate in Liters per minute")
+    lube_tank_level_pct: float = Field(default=85.0, description="Lubricant reservoir fluid level percentage")
+    nozzle_clog_detected: bool = Field(default=False, description="Whether spray backpressure indicates nozzle clogging")
 
 
 class TireFitmentMetrics(BaseModel):
@@ -76,20 +101,24 @@ class TireFitmentMetrics(BaseModel):
     angular_misalignment_deg: float = Field(description="Wheel hub angle deviation")
     torque_at_seating_nm: float = Field(description="Final tightening torque")
     clamp_engaged: bool = True
+    inflation_burst_pressure_bar: Optional[float] = Field(default=4.8, description="Burst pressure applied in bead seating cage")
+    bead_pop_detected: Optional[bool] = Field(default=True, description="Acoustic/pressure verification of bead seat pop")
+    radial_runout_mm: Optional[float] = Field(default=0.45, description="Radial tire uniformity runout in mm")
+    lateral_runout_mm: Optional[float] = Field(default=0.35, description="Lateral tire uniformity runout in mm")
 
 
 class VisualDefectItem(BaseModel):
     defect_id: str = Field(description="Unique visual defect identifier (e.g. VIS-001)")
     location: str = Field(description="Physical machinery location in frame")
-    defect_type: str = Field(description="SURFACE_PITTING | FATIGUE_CRACK | SEAL_EXTRUSION | THERMAL_HOTSPOT | LUBRICANT_DEGRADATION")
+    defect_type: str = Field(description="SURFACE_PITTING | FATIGUE_CRACK | SEAL_EXTRUSION | THERMAL_HOTSPOT | LUBRICANT_DEGRADATION | BEAD_CHAFE")
     bounding_box: List[int] = Field(default_factory=list, description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1000")
     confidence: float = Field(default=85.0, description="Visual defect confidence percentage")
     description: str = Field(description="Visual observation from Vision-Language Model")
 
 
 class MachineryImageFrame(BaseModel):
-    camera_id: str = Field(description="e.g. CAM_FLIR_IR_01, CAM_MACRO_OPTICAL_02")
-    image_type: str = Field(default="OPTICAL_MACRO", description="THERMAL_IR | OPTICAL_MACRO | RGB_CONTEXT")
+    camera_id: str = Field(description="e.g. CAM_FLIR_IR_01, CAM_MACRO_OPTICAL_02, CAM_BEAD_PROFILE_03")
+    image_type: str = Field(default="OPTICAL_MACRO", description="THERMAL_IR | OPTICAL_MACRO | RGB_CONTEXT | LASER_PROFILOMETRY")
     image_base64: Optional[str] = Field(default=None, description="Base64 encoded JPEG payload")
     image_url: Optional[str] = Field(default=None, description="Relative file path or URI")
     min_temp_c: Optional[float] = Field(default=None, description="Radiometric thermal minimum scale")
@@ -105,7 +134,10 @@ class MachineryImageFrame(BaseModel):
 
 class MultimodalTelemetrySnapshot(BaseModel):
     timestamp: str = Field(description="ISO 8601 timestamp of sensor capture")
-    station_id: str = Field(description="Identifier for robotic station")
+    station_id: str = Field(description="Identifier for robotic station (e.g. MICHELIN-LINE03-FITTER01)")
+    tire_metadata: Optional[TireMetadata] = None
+    conveyor: Optional[ConveyorTelemetry] = None
+    bead_lubrication: Optional[BeadLubricationTelemetry] = None
     joints: Dict[str, JointTelemetry] = Field(default_factory=dict)
     line_voltage_v: float = Field(default=400.0, description="3-phase root-mean-square voltage")
     total_current_a: float = Field(default=14.5, description="Total station power current draw")
@@ -124,7 +156,6 @@ class MultimodalTelemetrySnapshot(BaseModel):
         if not v:
             return v
         cleaned = v.strip().replace("\r\n", " ").replace("\n", " ").replace("\t", " ")
-        # Truncate to 500 chars
         return cleaned[:500]
 
 

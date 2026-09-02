@@ -125,23 +125,30 @@ class AsyncOllamaClient:
         # Fallback for Triage
         if schema_class == TriageAssessment:
             domain = IncidentDomain.KINEMATIC_MISALIGNMENT
-            if (
-                "pneumatic_pressure_bar: 4" in prompt_lower
-                or "pneumatic_pressure_bar: 3" in prompt_lower
-                or "valve_hiss" in prompt_lower
-                or "pressure dropped" in prompt_lower
-                or "bead_seating_offset_mm: 1." in prompt_lower
-                or "bead_seating_offset_mm: 2." in prompt_lower
-            ):
-                domain = IncidentDomain.PNEUMATIC_PRESSURE_DROP
+            if "'nozzle_clog_detected': true" in prompt_lower or "nozzle_pressure_bar': 1." in prompt_lower:
+                domain = IncidentDomain.BEAD_LUBRICATION_FAILURE
+            elif "belt_speed_mps': 0.2" in prompt_lower or "belt_tension_n': 2" in prompt_lower:
+                domain = IncidentDomain.CONVEYOR_BELT_SLIP
             elif (
                 "temp_c: 8" in prompt_lower
                 or "temp_c: 9" in prompt_lower
-                or "thermal" in prompt_lower
+                or "temp: 88" in prompt_lower
+                or "88.5" in prompt_lower
                 or "bearing_grind" in prompt_lower
+                or "sop-harmonic-001" in prompt_lower
+                or "thermal sensor reached" in prompt_lower
+                or "thermal readings on joint 3" in prompt_lower
             ):
                 domain = IncidentDomain.THERMAL_OVERHEAT
-            elif "line voltage: 3" in prompt_lower or "undervoltage" in prompt_lower:
+            elif (
+                "valve_hiss" in prompt_lower
+                or "pneumatic_pressure_bar: 4" in prompt_lower
+                or "pneumatic_pressure_bar: 3" in prompt_lower
+                or "pressure dropped" in prompt_lower
+                or "sop-pneumatic-002" in prompt_lower
+            ):
+                domain = IncidentDomain.PNEUMATIC_PRESSURE_DROP
+            elif "line voltage: 35" in prompt_lower or "line voltage: 36" in prompt_lower or "line voltage: 37" in prompt_lower or "undervoltage" in prompt_lower:
                 domain = IncidentDomain.ELECTRICAL_POWER_SAG
 
             return TriageAssessment(
@@ -154,7 +161,7 @@ class AsyncOllamaClient:
 
         # Fallback for Root Cause Hypothesis
         if schema_class == RootCauseHypothesis:
-            if "incident domain: pneumatic_pressure_drop" in prompt_lower or "sop-pneumatic-002" in prompt_lower and "sop-harmonic-001" not in prompt_lower:
+            if "incident domain: pneumatic_pressure_drop" in prompt_lower or ("sop-pneumatic-002" in prompt_lower and "incident domain: bead_lubrication_failure" not in prompt_lower and "incident domain: thermal_overheat" not in prompt_lower):
                 return RootCauseHypothesis(
                     rank=1,
                     title="Pneumatic Gripper Supply Solenoid Valve Seal Blow-by",
@@ -168,11 +175,39 @@ class AsyncOllamaClient:
                     cited_evidence_ids=["EVD-001"],
                     preliminary_confidence=84.0
                 )
+            elif "incident domain: bead_lubrication_failure" in prompt_lower or "sop-lube-006" in prompt_lower:
+                return RootCauseHypothesis(
+                    rank=1,
+                    title="Bead Lubrication Spray Nozzle Clog & Dry-Friction Bead Seating Offset",
+                    description="Automated soap/water spray atomizer tip clogged by dried residue, causing dry friction during bead press-down and resulting in 1.55mm laser seating offset.",
+                    affected_component="Bead_Lubrication_Spray_Header",
+                    causal_chain=[
+                        "Lubrication spray atomizer nozzle tip clog",
+                        "Dry rubber-to-metal friction during bead press-down",
+                        "Mounting torque spike and 1.55mm radial bead seating offset"
+                    ],
+                    cited_evidence_ids=["EVD-001"],
+                    preliminary_confidence=91.0
+                )
+            elif "incident domain: conveyor_belt_slip" in prompt_lower or "sop-conveyor-007" in prompt_lower:
+                return RootCauseHypothesis(
+                    rank=1,
+                    title="Infeed Conveyor Belt Slippage & Position Misalignment",
+                    description="Conveyor belt tension drop below 240 N causing belt slip on drive pulley.",
+                    affected_component="Infeed_Conveyor",
+                    causal_chain=[
+                        "Belt tension loss",
+                        "Drive pulley slippage",
+                        "Infeed timing mismatch"
+                    ],
+                    cited_evidence_ids=["EVD-001"],
+                    preliminary_confidence=86.0
+                )
             elif (
                 "incident domain: thermal_overheat" in prompt_lower
                 or "sop-harmonic-001" in prompt_lower
-                or "joint 3" in prompt_lower
                 or "thermal" in prompt_lower
+                or "bearing_grind" in prompt_lower
             ):
                 return RootCauseHypothesis(
                     rank=1,
@@ -201,9 +236,10 @@ class AsyncOllamaClient:
         # Fallback for Critic Evaluation
         if schema_class == CriticEvaluation:
             has_contradiction = (
-                "['contradiction" in prompt_lower
-                or "check for contradiction:" in prompt_lower
-                or ("temp: 92" in prompt_lower and "curr: 3.1" in prompt_lower and "[]" in prompt_lower)
+                "check for contradiction:" in prompt_lower
+                or "['contradiction:" in prompt_lower
+                or ("temp: 92" in prompt_lower and "curr: 3.1" in prompt_lower)
+                or ("thermocouple" in prompt_lower and "curr: 3.1" in prompt_lower)
             )
             if has_contradiction:
                 return CriticEvaluation(

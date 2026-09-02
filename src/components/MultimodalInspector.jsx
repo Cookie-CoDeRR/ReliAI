@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Eye, Volume2, Zap, Wind, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Eye, Volume2, Zap, Wind, AlertTriangle, ShieldCheck, Tag, Disc } from 'lucide-react';
 
 export default function MultimodalInspector({ telemetry = {}, hasThermalFault = false, hasAcousticFault = false }) {
   const canvasRef = useRef(null);
@@ -43,17 +43,29 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
   const voltage = telemetry.line_voltage_v || 400.0;
   const current = telemetry.total_current_a || 14.5;
   const pressure = telemetry.pneumatic_pressure_bar || 6.2;
+  const conveyor = telemetry.conveyor || { belt_speed_mps: 0.5, belt_tension_n: 320.0 };
+  const lube = telemetry.bead_lubrication || { nozzle_pressure_bar: 3.5, lube_flow_rate_lpm: 0.45, nozzle_clog_detected: false };
+  const tire = telemetry.tire_metadata || { tire_sku: "Michelin Pilot Sport 5 225/45 R17", dot_code: "DOT 6X 7Y 0126" };
+
+  const hasLubeFault = lube.nozzle_pressure_bar < 2.2 || lube.nozzle_clog_detected;
+  const hasConveyorFault = conveyor.belt_speed_mps < 0.35 || conveyor.belt_tension_n < 240;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
+    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl space-y-4">
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
           <Eye className="w-4 h-4 text-cyan-400" />
-          <span>Multimodal Sensor Telemetry & Physical Evidence</span>
+          <span>Multimodal Hardware Telemetry & Michelin Conveyor Bus</span>
         </div>
-        <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-800">
-          LIVE HARDWARE BUS
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800 flex items-center gap-1">
+            <Tag className="w-3 h-3" />
+            {tire.tire_sku.split(" ")[0]} {tire.tire_sku.split(" ")[1] || "TIRE"}
+          </span>
+          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-800">
+            OPC UA / SPARKPLUG B
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -70,7 +82,6 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
           </div>
 
           <div className="relative h-28 rounded-lg overflow-hidden border border-slate-800 bg-gradient-to-tr from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center">
-            {/* Synthetic Thermal Heatmap Gradient */}
             <div 
               className={`w-20 h-20 rounded-full blur-xl transition-all ${
                 hasThermalFault 
@@ -91,7 +102,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
           <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
             <span className="flex items-center gap-1.5 font-semibold text-slate-300">
               <Volume2 className="w-3.5 h-3.5 text-sky-400" />
-              Acoustic FFT Hydrophone
+              Acoustic Hydrophone FFT
             </span>
             <span className={hasAcousticFault ? "text-rose-400 font-bold" : "text-emerald-400"}>
               {hasAcousticFault ? "2.8 kHz PEAK" : "72 dB NOMINAL"}
@@ -136,6 +147,45 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
             </div>
           </div>
           <p className="text-[10px] text-slate-500 font-mono mt-2">3-Phase 400V RMS • 6.2 bar Gripper Line</p>
+        </div>
+      </div>
+
+      {/* Michelin Conveyor Belt & Bead Lubrication Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+        {/* Conveyor Line Telemetry */}
+        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
+          <div className="flex items-center gap-2">
+            <Disc className={`w-4 h-4 ${hasConveyorFault ? 'text-rose-400 animate-spin' : 'text-cyan-400'}`} />
+            <div>
+              <div className="text-[10px] text-slate-400 font-sans font-semibold">INFEED CONVEYOR BELT</div>
+              <div className="text-slate-200">
+                Speed: <span className={hasConveyorFault ? "text-rose-400 font-bold" : "text-cyan-300 font-bold"}>{conveyor.belt_speed_mps.toFixed(2)} m/s</span>
+                <span className="text-slate-500 mx-1.5">•</span>
+                Tension: <span className="text-slate-300">{conveyor.belt_tension_n.toFixed(0)} N</span>
+              </div>
+            </div>
+          </div>
+          <span className={`px-2 py-0.5 rounded text-[10px] ${hasConveyorFault ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+            {hasConveyorFault ? 'BELT SLIP' : 'TRACKING OK'}
+          </span>
+        </div>
+
+        {/* Bead Lubrication System */}
+        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
+          <div className="flex items-center gap-2">
+            <Wind className={`w-4 h-4 ${hasLubeFault ? 'text-rose-400 animate-pulse' : 'text-teal-400'}`} />
+            <div>
+              <div className="text-[10px] text-slate-400 font-sans font-semibold">BEAD LUBRICANT ATOMIZER</div>
+              <div className="text-slate-200">
+                Pressure: <span className={hasLubeFault ? "text-rose-400 font-bold" : "text-teal-300 font-bold"}>{lube.nozzle_pressure_bar.toFixed(2)} bar</span>
+                <span className="text-slate-500 mx-1.5">•</span>
+                Flow: <span className="text-slate-300">{lube.lube_flow_rate_lpm.toFixed(2)} LPM</span>
+              </div>
+            </div>
+          </div>
+          <span className={`px-2 py-0.5 rounded text-[10px] ${hasLubeFault ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
+            {hasLubeFault ? 'NOZZLE CLOGGED' : 'ATOMIZING OK'}
+          </span>
         </div>
       </div>
     </div>

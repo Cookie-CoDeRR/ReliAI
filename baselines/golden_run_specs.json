@@ -1,5 +1,5 @@
 {
-  "station_type": "6-DOF KUKA Robotic Tire-Mounting Cell",
+  "station_type": "6-DOF Robotic Tire Conveyor & Fitting Cell",
   "station_id_prefix": "STATION-TIRE-FITTER",
   "joints": {
     "Joint_1": {
@@ -51,6 +51,22 @@
       "warning_temp_c": 48.0
     }
   },
+  "conveyor": {
+    "nominal_belt_speed_mps": 0.5,
+    "min_belt_speed_mps": 0.35,
+    "max_belt_speed_mps": 0.75,
+    "nominal_tension_n": 320.0,
+    "min_tension_n": 240.0,
+    "max_tension_n": 420.0,
+    "max_vfd_current_a": 5.2
+  },
+  "bead_lubrication": {
+    "nominal_pressure_bar": 3.5,
+    "min_pressure_bar": 2.5,
+    "max_pressure_bar": 4.5,
+    "min_flow_rate_lpm": 0.30,
+    "min_tank_level_pct": 20.0
+  },
   "electrical": {
     "nominal_line_voltage_v": 400.0,
     "min_allowed_voltage_v": 380.0,
@@ -67,7 +83,10 @@
     "max_radial_offset_mm": 0.8,
     "max_angular_deviation_deg": 0.35,
     "target_seating_torque_nm": 125.0,
-    "torque_tolerance_nm": 5.0
+    "torque_tolerance_nm": 5.0,
+    "min_inflation_burst_pressure_bar": 3.2,
+    "max_radial_runout_mm": 0.9,
+    "max_lateral_runout_mm": 0.7
   },
   "acoustic": {
     "nominal_harmonics_hz": [120.0, 240.0, 480.0],

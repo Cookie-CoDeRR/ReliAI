@@ -154,3 +154,25 @@ async def test_orchestrator_streaming_events(orchestrator):
     final_event = events[-1]
     assert final_event.get("step") == "FINAL_VERDICT"
     assert "verdict" in final_event
+
+
+@pytest.mark.asyncio
+async def test_scenario_5_michelin_conveyor_bead_lube_fail(orchestrator):
+    """
+    Scenario 5: Michelin Infeed Conveyor slip + Bead Lubrication atomizer clog.
+    Expected: CONCLUSIVE verdict, bead lubrication / nozzle clog cited.
+    """
+    import json
+    from pathlib import Path
+
+    scenario_file = Path(__file__).resolve().parent.parent / "scenarios" / "scenario_5_michelin_conveyor_bead_lube_fail.json"
+    with open(scenario_file, "r") as f:
+        data = json.load(f)
+
+    snapshot = MultimodalTelemetrySnapshot.model_validate(data["snapshot"])
+    verdict = await orchestrator.run_investigation(snapshot, incident_id="INC-MICHELIN-005")
+
+    assert verdict.status == InvestigationStatus.CONCLUSIVE
+    assert verdict.final_confidence_score >= 80.0
+    assert verdict.primary_root_cause is not None
+    assert "Bead Lubrication" in verdict.primary_root_cause.title or "Nozzle" in verdict.primary_root_cause.title
