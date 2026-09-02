@@ -1,5 +1,6 @@
+import re
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
@@ -9,7 +10,17 @@ from harness.orchestrator import InvestigationOrchestrator
 
 router = APIRouter(prefix="/api/v1", tags=["Web Platform & Incidents"])
 
-orchestrator = InvestigationOrchestrator()
+_shared_orchestrator: Optional[InvestigationOrchestrator] = None
+
+
+def get_orchestrator(request: Request = None) -> InvestigationOrchestrator:
+    """FastAPI dependency to retrieve the singleton InvestigationOrchestrator."""
+    global _shared_orchestrator
+    if request and hasattr(request.app.state, "orchestrator"):
+        return request.app.state.orchestrator
+    if _shared_orchestrator is None:
+        _shared_orchestrator = InvestigationOrchestrator()
+    return _shared_orchestrator
 
 
 class IngestIncidentRequest(BaseModel):
@@ -31,10 +42,18 @@ async def list_scenarios():
 
 
 @router.post("/scenarios/{scenario_id}/trigger")
-async def trigger_scenario(scenario_id: str, db: AsyncSession = Depends(get_db)):
+async def trigger_scenario(
+    scenario_id: str,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
     """
     Ingests and runs a full investigation for a pre-configured industrial scenario.
+    Validates scenario_id against path traversal attempts.
     """
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", scenario_id):
+        raise HTTPException(status_code=400, detail="Invalid scenario_id format")
+
     presets = IncidentService.list_preset_scenarios()
     target = next((s for s in presets if s["scenario_id"] == scenario_id), None)
     if not target:
@@ -58,7 +77,7 @@ async def trigger_scenario(scenario_id: str, db: AsyncSession = Depends(get_db))
         "incident_id": incident.id,
         "scenario_title": target["title"],
         "status": incident.status,
-        "verdict": verdict.model_dump()
+        "verdict": verdict.model_dump() if verdict else None
     }
 
 
@@ -112,7 +131,11 @@ async def get_incident(incident_id: str, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/incidents/{incident_id}/investigate")
-async def investigate_incident(incident_id: str, db: AsyncSession = Depends(get_db)):
+async def investigate_incident(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
     """Triggers the autonomous AI Investigation Harness for a stored incident."""
     try:
         verdict = await IncidentService.investigate_incident(
@@ -120,7 +143,10 @@ async def investigate_incident(incident_id: str, db: AsyncSession = Depends(get_
             incident_id=incident_id,
             orchestrator=orchestrator
         )
-        return {"status": "INVESTIGATION_COMPLETED", "verdict": verdict.model_dump()}
+        return {
+            "status": "INVESTIGATION_COMPLETED",
+            "verdict": verdict.model_dump() if verdict else None
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:

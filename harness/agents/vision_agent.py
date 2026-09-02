@@ -26,9 +26,13 @@ class VisionAgent:
 
         detected_defects: List[VisualDefectItem] = list(snapshot.visual_defects)
         visual_evidence: List[EvidenceItem] = []
+        errors: List[str] = []
+
+        total_frames = len(snapshot.image_frames)
+        processed_frames = 0
 
         # If raw image frames exist in telemetry, analyze via Vision Model
-        for idx, frame in enumerate(snapshot.image_frames):
+        for frame in snapshot.image_frames:
             frame_prompt = f"""
             INDUSTRIAL MACHINE DEFECT INSPECTION:
             Camera ID: {frame.camera_id}
@@ -44,7 +48,6 @@ class VisionAgent:
             """
 
             try:
-                # Call vision model if image data exists
                 defect = await self.client.generate_structured(
                     prompt=frame_prompt,
                     system_instruction="You are an industrial computer vision failure inspection specialist. Output valid JSON.",
@@ -53,8 +56,33 @@ class VisionAgent:
                     use_vision=True
                 )
                 detected_defects.append(defect)
+                processed_frames += 1
             except Exception as e:
-                logger.warning(f"Vision model evaluation failed on frame {frame.camera_id}: {e}")
+                err_msg = f"Vision model evaluation failed on camera {frame.camera_id}: {str(e)}"
+                logger.warning(err_msg)
+                errors.append(err_msg)
+
+        # Determine vision status
+        if total_frames == 0 and not detected_defects:
+            vision_status = "SKIPPED_NO_IMAGES"
+        elif errors and processed_frames == 0 and not snapshot.visual_defects:
+            vision_status = "VISION_FAILED"
+        elif errors:
+            vision_status = "VISION_PARTIAL"
+        else:
+            vision_status = "VISION_COMPLETED"
+
+        # If vision failed on all frames, emit a non-blocking evidence item flagging the failure
+        if vision_status == "VISION_FAILED":
+            visual_evidence.append(
+                EvidenceItem(
+                    evidence_id="EVD-VISUAL-ERR",
+                    source="Vision_Inspection_Pipeline",
+                    observation="Multimodal optical/thermal frame analysis could not be completed by Vision Model.",
+                    is_abnormal=False,
+                    severity="NOMINAL"
+                )
+            )
 
         # Convert detected defects into standardized Evidence Items
         for idx, defect in enumerate(detected_defects):
@@ -71,7 +99,9 @@ class VisionAgent:
 
         return {
             "agent": "VISION_AGENT",
+            "vision_status": vision_status,
             "detected_defects": [d.model_dump() for d in detected_defects],
             "visual_evidence": [e.model_dump() for e in visual_evidence],
-            "total_defects_found": len(detected_defects)
+            "total_defects_found": len(detected_defects),
+            "errors": errors
         }

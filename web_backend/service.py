@@ -53,6 +53,7 @@ class IncidentService:
         """
         Executes the autonomous AI investigation harness for an incident,
         records all intermediate agent traces, and updates the incident record.
+        Wraps execution in robust try-except to ensure incident is never left stuck in INVESTIGATING.
         """
         result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
         incident = result.scalar_one_or_none()
@@ -65,37 +66,56 @@ class IncidentService:
 
         final_verdict: Optional[InvestigationVerdict] = None
 
-        # Execute streaming run and record traces
-        async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
-            trace = AgentTraceRecord(
+        try:
+            # Execute streaming run and record traces
+            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
+                trace = AgentTraceRecord(
+                    incident_id=incident_id,
+                    agent_name=event.get("agent", "UNKNOWN"),
+                    step_type=event.get("step", "TRACE"),
+                    message=event.get("message"),
+                    payload_json=event.get("payload") or event.get("verdict"),
+                    created_at=datetime.datetime.now(datetime.timezone.utc)
+                )
+                db.add(trace)
+
+                if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
+                    final_verdict = InvestigationVerdict.model_validate(event["verdict"])
+
+            if final_verdict:
+                incident.status = "PENDING_APPROVAL" if final_verdict.status == InvestigationStatus.CONCLUSIVE else final_verdict.status.value
+                incident.final_confidence_score = final_verdict.final_confidence_score
+                incident.contradiction_detected = len(final_verdict.critic_report.contradictions_detected) > 0
+                incident.recommended_mitigation = final_verdict.recommended_mitigation
+                incident.requires_human_inspection = final_verdict.requires_human_inspection
+                incident.verdict_json = final_verdict.model_dump()
+
+                if final_verdict.primary_root_cause:
+                    incident.root_cause_title = final_verdict.primary_root_cause.title
+                    incident.root_cause_description = final_verdict.primary_root_cause.description
+                    incident.affected_component = final_verdict.primary_root_cause.affected_component
+            else:
+                incident.status = "FAILED"
+
+            await db.commit()
+            await db.refresh(incident)
+            return final_verdict
+
+        except Exception as e:
+            # Prevent incident from being perpetually trapped in INVESTIGATING state
+            incident.status = "FAILED"
+            fail_trace = AgentTraceRecord(
                 incident_id=incident_id,
-                agent_name=event.get("agent", "UNKNOWN"),
-                step_type=event.get("step", "TRACE"),
-                message=event.get("message"),
-                payload_json=event.get("payload") or event.get("verdict"),
+                agent_name="ORCHESTRATOR",
+                step_type="ERROR",
+                message=f"Investigation pipeline aborted due to runtime error: {str(e)}",
+                payload_json={"error": str(e)},
                 created_at=datetime.datetime.now(datetime.timezone.utc)
             )
-            db.add(trace)
-
-            if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
-                final_verdict = InvestigationVerdict.model_validate(event["verdict"])
-
-        if final_verdict:
-            incident.status = "PENDING_APPROVAL" if final_verdict.status == InvestigationStatus.CONCLUSIVE else final_verdict.status.value
-            incident.final_confidence_score = final_verdict.final_confidence_score
-            incident.contradiction_detected = len(final_verdict.critic_report.contradictions_detected) > 0
-            incident.recommended_mitigation = final_verdict.recommended_mitigation
-            incident.requires_human_inspection = final_verdict.requires_human_inspection
-            incident.verdict_json = final_verdict.model_dump()
-
-            if final_verdict.primary_root_cause:
-                incident.root_cause_title = final_verdict.primary_root_cause.title
-                incident.root_cause_description = final_verdict.primary_root_cause.description
-                incident.affected_component = final_verdict.primary_root_cause.affected_component
-
-        await db.commit()
-        await db.refresh(incident)
-        return final_verdict
+            db.add(fail_trace)
+            await db.commit()
+            await db.refresh(incident)
+            raise e
 
     @staticmethod
     async def record_human_approval(
@@ -211,7 +231,8 @@ class IncidentService:
         """Loads and returns all preset scenarios from scenarios/ directory."""
         scenarios_dir = Path(__file__).resolve().parent.parent / "scenarios"
         presets = []
-        for file in sorted(scenarios_dir.glob("*.json")):
-            with open(file, "r", encoding="utf-8") as f:
-                presets.append(json.load(f))
+        if scenarios_dir.exists():
+            for file in sorted(scenarios_dir.glob("*.json")):
+                with open(file, "r", encoding="utf-8") as f:
+                    presets.append(json.load(f))
         return presets

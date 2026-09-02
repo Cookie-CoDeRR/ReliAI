@@ -26,10 +26,12 @@ class InvestigationOrchestrator:
     def __init__(
         self,
         ollama_client: Optional[AsyncOllamaClient] = None,
-        baseline_engine: Optional[BaselineEngine] = None
+        baseline_engine: Optional[BaselineEngine] = None,
+        max_concurrent: int = 2
     ):
         self.client = ollama_client or AsyncOllamaClient()
         self.baseline_engine = baseline_engine or BaselineEngine()
+        self.semaphore = asyncio.Semaphore(max_concurrent)
 
         # Initialize specialized domain agents (Consolidated on Gemma + Qwen2.5-VL for vision)
         self.triage_agent = TriageAgent(self.client)
@@ -50,148 +52,150 @@ class InvestigationOrchestrator:
         """
         Executes the step-by-step multi-agent investigation pipeline as an async generator
         for live Server-Sent Events (SSE) streaming.
+        Guarded by a concurrency semaphore to prevent edge device VRAM over-allocation.
         """
-        start_time = time.perf_counter()
-        inc_id = incident_id or f"INC-{int(start_time)}"
-        station_id = snapshot.station_id
+        async with self.semaphore:
+            start_time = time.perf_counter()
+            inc_id = incident_id or f"INC-{int(start_time)}"
+            station_id = snapshot.station_id
 
-        # -------------------------------------------------------------
-        # STEP 1: TRIAGE AGENT
-        # -------------------------------------------------------------
-        yield {
-            "incident_id": inc_id,
-            "agent": "TRIAGE_AGENT",
-            "step": "STARTED",
-            "message": f"Triaging multimodal telemetry alert from {station_id} using Gemma..."
-        }
-
-        triage: TriageAssessment = await self.triage_agent.evaluate(snapshot)
-        yield {
-            "incident_id": inc_id,
-            "agent": "TRIAGE_AGENT",
-            "step": "COMPLETED",
-            "payload": triage.model_dump()
-        }
-
-        # -------------------------------------------------------------
-        # STEP 2: EVIDENCE & BASELINE RAG AGENT
-        # -------------------------------------------------------------
-        yield {
-            "incident_id": inc_id,
-            "agent": "EVIDENCE_RAG_AGENT",
-            "step": "STARTED",
-            "message": "Computing mathematical deviations from Golden Baselines and querying SOP store..."
-        }
-
-        evidence_data = await self.evidence_agent.collect_evidence(snapshot)
-        evidence_items = list(evidence_data["evidence_items"])
-        matched_sops = evidence_data["matched_sops"]
-
-        # -------------------------------------------------------------
-        # STEP 3: PARALLEL DOMAIN & MULTIMODAL VISION ANALYSIS
-        # -------------------------------------------------------------
-        yield {
-            "incident_id": inc_id,
-            "agent": "DOMAIN_ANALYSIS",
-            "step": "STARTED",
-            "message": "Executing parallel domain analysis (Kinematics, Quality, Maintenance, and Qwen2.5-VL Vision Inspection)..."
-        }
-
-        telemetry_task = self.telemetry_agent.analyze(snapshot, evidence_items)
-        quality_task = self.quality_agent.analyze(snapshot)
-        maintenance_task = self.maintenance_agent.correlate(snapshot, evidence_items)
-        vision_task = self.vision_agent.evaluate(snapshot)
-
-        telemetry_res, quality_res, maintenance_res, vision_res = await asyncio.gather(
-            telemetry_task, quality_task, maintenance_task, vision_task
-        )
-
-        # Merge any detected visual evidence into the empirical evidence list
-        for v_ev in vision_res.get("visual_evidence", []):
-            evidence_items.append(EvidenceItem.model_validate(v_ev))
-
-        yield {
-            "incident_id": inc_id,
-            "agent": "DOMAIN_ANALYSIS",
-            "step": "COMPLETED",
-            "payload": {
-                "telemetry": telemetry_res,
-                "quality": quality_res,
-                "maintenance": maintenance_res,
-                "vision": vision_res
+            # -------------------------------------------------------------
+            # STEP 1: TRIAGE AGENT
+            # -------------------------------------------------------------
+            yield {
+                "incident_id": inc_id,
+                "agent": "TRIAGE_AGENT",
+                "step": "STARTED",
+                "message": f"Triaging multimodal telemetry alert from {station_id} using Gemma..."
             }
-        }
 
-        # -------------------------------------------------------------
-        # STEP 4: ROOT CAUSE GENERATION AGENT
-        # -------------------------------------------------------------
-        yield {
-            "incident_id": inc_id,
-            "agent": "ROOT_CAUSE_AGENT",
-            "step": "STARTED",
-            "message": "Formulating ranked causal hypotheses grounded in empirical evidence via Gemma..."
-        }
+            triage: TriageAssessment = await self.triage_agent.evaluate(snapshot)
+            yield {
+                "incident_id": inc_id,
+                "agent": "TRIAGE_AGENT",
+                "step": "COMPLETED",
+                "payload": triage.model_dump()
+            }
 
-        hypothesis: RootCauseHypothesis = await self.root_cause_agent.formulate_hypothesis(
-            snapshot=snapshot,
-            triage=triage,
-            evidence_data={"evidence_items": evidence_items, "matched_sops": matched_sops},
-            telemetry_data=telemetry_res,
-            quality_data=quality_res,
-            maintenance_data=maintenance_res
-        )
+            # -------------------------------------------------------------
+            # STEP 2: EVIDENCE & BASELINE RAG AGENT
+            # -------------------------------------------------------------
+            yield {
+                "incident_id": inc_id,
+                "agent": "EVIDENCE_RAG_AGENT",
+                "step": "STARTED",
+                "message": "Computing mathematical deviations from Golden Baselines and querying SOP store..."
+            }
 
-        yield {
-            "incident_id": inc_id,
-            "agent": "ROOT_CAUSE_AGENT",
-            "step": "COMPLETED",
-            "payload": hypothesis.model_dump()
-        }
+            evidence_data = await self.evidence_agent.collect_evidence(snapshot)
+            evidence_items = list(evidence_data["evidence_items"])
+            matched_sops = evidence_data["matched_sops"]
 
-        # -------------------------------------------------------------
-        # STEP 5: ADVERSARIAL CRITIC AGENT (CONSOLIDATED ON GEMMA)
-        # -------------------------------------------------------------
-        yield {
-            "incident_id": inc_id,
-            "agent": "CRITIC_AGENT",
-            "step": "STARTED",
-            "message": f"Adversarial Critic auditing hypothesis '{hypothesis.title}' for physical contradictions..."
-        }
+            # -------------------------------------------------------------
+            # STEP 3: PARALLEL DOMAIN & MULTIMODAL VISION ANALYSIS
+            # -------------------------------------------------------------
+            yield {
+                "incident_id": inc_id,
+                "agent": "DOMAIN_ANALYSIS",
+                "step": "STARTED",
+                "message": "Executing parallel domain analysis (Kinematics, Quality, Maintenance, and Qwen2.5-VL Vision Inspection)..."
+            }
 
-        critic_eval: CriticEvaluation = await self.critic_agent.evaluate_hypothesis(
-            hypothesis=hypothesis,
-            snapshot=snapshot,
-            evidence_items=evidence_items
-        )
+            telemetry_task = self.telemetry_agent.analyze(snapshot, evidence_items)
+            quality_task = self.quality_agent.analyze(snapshot)
+            maintenance_task = self.maintenance_agent.correlate(snapshot, evidence_items)
+            vision_task = self.vision_agent.evaluate(snapshot)
 
-        yield {
-            "incident_id": inc_id,
-            "agent": "CRITIC_AGENT",
-            "step": "COMPLETED",
-            "payload": critic_eval.model_dump()
-        }
+            telemetry_res, quality_res, maintenance_res, vision_res = await asyncio.gather(
+                telemetry_task, quality_task, maintenance_task, vision_task
+            )
 
-        # -------------------------------------------------------------
-        # STEP 6: DETERMINISTIC RISK & CONFIDENCE ENGINE
-        # -------------------------------------------------------------
-        duration_ms = (time.perf_counter() - start_time) * 1000.0
+            # Merge any detected visual evidence into the empirical evidence list
+            for v_ev in vision_res.get("visual_evidence", []):
+                evidence_items.append(EvidenceItem.model_validate(v_ev))
 
-        verdict: InvestigationVerdict = self.confidence_engine.calculate_verdict(
-            incident_id=inc_id,
-            station_id=station_id,
-            hypothesis=hypothesis,
-            critic_report=critic_eval,
-            evidence_items=evidence_items,
-            matched_sops=matched_sops,
-            duration_ms=round(duration_ms, 2)
-        )
+            yield {
+                "incident_id": inc_id,
+                "agent": "DOMAIN_ANALYSIS",
+                "step": "COMPLETED",
+                "payload": {
+                    "telemetry": telemetry_res,
+                    "quality": quality_res,
+                    "maintenance": maintenance_res,
+                    "vision": vision_res
+                }
+            }
 
-        yield {
-            "incident_id": inc_id,
-            "agent": "CONFIDENCE_ENGINE",
-            "step": "FINAL_VERDICT",
-            "verdict": verdict.model_dump()
-        }
+            # -------------------------------------------------------------
+            # STEP 4: ROOT CAUSE GENERATION AGENT
+            # -------------------------------------------------------------
+            yield {
+                "incident_id": inc_id,
+                "agent": "ROOT_CAUSE_AGENT",
+                "step": "STARTED",
+                "message": "Formulating ranked causal hypotheses grounded in empirical evidence via Gemma..."
+            }
+
+            hypothesis: RootCauseHypothesis = await self.root_cause_agent.formulate_hypothesis(
+                snapshot=snapshot,
+                triage=triage,
+                evidence_data={"evidence_items": evidence_items, "matched_sops": matched_sops},
+                telemetry_data=telemetry_res,
+                quality_data=quality_res,
+                maintenance_data=maintenance_res
+            )
+
+            yield {
+                "incident_id": inc_id,
+                "agent": "ROOT_CAUSE_AGENT",
+                "step": "COMPLETED",
+                "payload": hypothesis.model_dump()
+            }
+
+            # -------------------------------------------------------------
+            # STEP 5: ADVERSARIAL CRITIC AGENT (CONSOLIDATED ON GEMMA)
+            # -------------------------------------------------------------
+            yield {
+                "incident_id": inc_id,
+                "agent": "CRITIC_AGENT",
+                "step": "STARTED",
+                "message": f"Adversarial Critic auditing hypothesis '{hypothesis.title}' for physical contradictions..."
+            }
+
+            critic_eval: CriticEvaluation = await self.critic_agent.evaluate_hypothesis(
+                hypothesis=hypothesis,
+                snapshot=snapshot,
+                evidence_items=evidence_items
+            )
+
+            yield {
+                "incident_id": inc_id,
+                "agent": "CRITIC_AGENT",
+                "step": "COMPLETED",
+                "payload": critic_eval.model_dump()
+            }
+
+            # -------------------------------------------------------------
+            # STEP 6: DETERMINISTIC RISK & CONFIDENCE ENGINE
+            # -------------------------------------------------------------
+            duration_ms = (time.perf_counter() - start_time) * 1000.0
+
+            verdict: InvestigationVerdict = self.confidence_engine.calculate_verdict(
+                incident_id=inc_id,
+                station_id=station_id,
+                hypothesis=hypothesis,
+                critic_report=critic_eval,
+                evidence_items=evidence_items,
+                matched_sops=matched_sops,
+                duration_ms=round(duration_ms, 2)
+            )
+
+            yield {
+                "incident_id": inc_id,
+                "agent": "CONFIDENCE_ENGINE",
+                "step": "FINAL_VERDICT",
+                "verdict": verdict.model_dump()
+            }
 
     async def run_investigation(
         self,

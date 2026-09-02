@@ -1,7 +1,7 @@
 from __future__ import annotations
 from enum import Enum
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Literal
+from pydantic import BaseModel, Field, field_validator
 
 
 class IncidentSeverity(str, Enum):
@@ -28,6 +28,7 @@ class InvestigationStatus(str, Enum):
     PENDING_APPROVAL = "PENDING_APPROVAL"
     APPROVED = "APPROVED"
     OVERRIDDEN = "OVERRIDDEN"
+    FAILED = "FAILED"
 
 
 # -----------------------------------------------------------------------------
@@ -47,7 +48,20 @@ class ThermalHotspot(BaseModel):
     location: str = Field(description="Identified hot region (e.g. Joint 3 Harmonic Gearbox)")
     temp_c: float = Field(description="Peak thermal reading in Celsius")
     delta_ambient_c: float = Field(description="Temperature delta above ambient")
-    severity: str = Field(default="MODERATE")
+    severity: Literal["CRITICAL", "HIGH", "MODERATE", "NOMINAL"] = Field(default="MODERATE")
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_severity(cls, v: Any) -> str:
+        if isinstance(v, str):
+            val = v.upper()
+            if val in ("CRITICAL", "HIGH", "MODERATE", "NOMINAL"):
+                return val
+            if val == "MEDIUM":
+                return "MODERATE"
+            if val == "LOW":
+                return "NOMINAL"
+        return "MODERATE"
 
 
 class AcousticAnomaly(BaseModel):
@@ -81,6 +95,13 @@ class MachineryImageFrame(BaseModel):
     min_temp_c: Optional[float] = Field(default=None, description="Radiometric thermal minimum scale")
     max_temp_c: Optional[float] = Field(default=None, description="Radiometric thermal maximum scale")
 
+    @field_validator("image_base64")
+    @classmethod
+    def validate_image_base64_size(cls, v: Optional[str]) -> Optional[str]:
+        if v and len(v) > 10_000_000:
+            raise ValueError("image_base64 payload exceeds the 10MB maximum edge buffer limit")
+        return v
+
 
 class MultimodalTelemetrySnapshot(BaseModel):
     timestamp: str = Field(description="ISO 8601 timestamp of sensor capture")
@@ -95,7 +116,16 @@ class MultimodalTelemetrySnapshot(BaseModel):
     image_frames: List[MachineryImageFrame] = Field(default_factory=list)
     tire_fitment: Optional[TireFitmentMetrics] = None
     e_stop_triggered: bool = False
-    operator_shift_notes: Optional[str] = None
+    operator_shift_notes: Optional[str] = Field(default=None, max_length=500, description="Operator shift notes")
+
+    @field_validator("operator_shift_notes")
+    @classmethod
+    def sanitize_operator_notes(cls, v: Optional[str]) -> Optional[str]:
+        if not v:
+            return v
+        cleaned = v.strip().replace("\r\n", " ").replace("\n", " ").replace("\t", " ")
+        # Truncate to 500 chars
+        return cleaned[:500]
 
 
 # -----------------------------------------------------------------------------
@@ -107,9 +137,22 @@ class EvidenceItem(BaseModel):
     source: str = Field(description="Sensor, Log, or SOP identifier")
     observation: str = Field(description="Factual measured deviation or log entry")
     is_abnormal: bool = Field(description="Whether this departs from Golden Run specs")
-    severity: str = Field(default="MODERATE", description="CRITICAL | MODERATE | NOMINAL")
+    severity: Literal["CRITICAL", "HIGH", "MODERATE", "NOMINAL"] = Field(default="MODERATE", description="CRITICAL | HIGH | MODERATE | NOMINAL")
     deviation_percent: Optional[float] = Field(default=None, description="Percentage deviation from ideal")
     golden_baseline_reference: Optional[str] = Field(default=None, description="Expected normal range")
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_evidence_severity(cls, v: Any) -> str:
+        if isinstance(v, str):
+            val = v.upper()
+            if val in ("CRITICAL", "HIGH", "MODERATE", "NOMINAL"):
+                return val
+            if val == "MEDIUM":
+                return "MODERATE"
+            if val == "LOW":
+                return "NOMINAL"
+        return "MODERATE"
 
 
 # -----------------------------------------------------------------------------

@@ -1,3 +1,4 @@
+import os
 import json
 import asyncio
 import logging
@@ -19,12 +20,18 @@ from web_backend.router import router as web_router
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("reliai-harness")
 
+# Singleton service instances
+ollama_client = AsyncOllamaClient()
+baseline_engine = BaselineEngine()
+orchestrator = InvestigationOrchestrator(ollama_client=ollama_client, baseline_engine=baseline_engine)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables
+    # Startup: initialize database tables & store singleton references
     logger.info("Initializing SQLite/PostgreSQL database tables...")
     await init_db()
+    app.state.orchestrator = orchestrator
     logger.info("ReliAI Platform ready.")
     yield
 
@@ -36,22 +43,21 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Enable CORS for local and factory dashboard web clients
+# Parse allowed origins from environment or default to common dev ports
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+# Enable CORS with explicit origin allowlist
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # Mount Web Platform REST Router (/api/v1)
 app.include_router(web_router)
-
-# Singleton service instances
-ollama_client = AsyncOllamaClient()
-baseline_engine = BaselineEngine()
-orchestrator = InvestigationOrchestrator(ollama_client=ollama_client, baseline_engine=baseline_engine)
 
 
 @app.get("/harness/health")

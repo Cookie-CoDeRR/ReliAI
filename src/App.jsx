@@ -70,44 +70,52 @@ export default function App() {
       const incId = ingestData.incident_id;
       setCurrentIncidentId(incId);
 
-      // 3. Connect to live SSE investigation stream
+      // 3. Connect to live SSE investigation stream with a 2-minute safety timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
       const response = await fetch(`/harness/investigate/stream?incident_id=${incId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(targetPreset?.snapshot)
+        body: JSON.stringify(targetPreset?.snapshot),
+        signal: controller.signal
       });
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n\n');
-        buffer = lines.pop(); // Keep incomplete chunk
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n\n');
+          buffer = lines.pop(); // Keep incomplete chunk
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const rawJson = line.replace('data: ', '').trim();
-            if (rawJson && rawJson !== '{}') {
-              try {
-                const event = JSON.parse(rawJson);
-                setActiveAgent(event.agent);
-                setAgentTraces(prev => [...prev, event]);
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const rawJson = line.replace('data: ', '').trim();
+              if (rawJson && rawJson !== '{}') {
+                try {
+                  const event = JSON.parse(rawJson);
+                  setActiveAgent(event.agent);
+                  setAgentTraces(prev => [...prev, event]);
 
-                if (event.step === 'FINAL_VERDICT' && event.verdict) {
-                  setVerdict(event.verdict);
-                  setStatus(event.verdict.status === 'CONCLUSIVE' ? 'PENDING_APPROVAL' : event.verdict.status);
+                  if (event.step === 'FINAL_VERDICT' && event.verdict) {
+                    setVerdict(event.verdict);
+                    setStatus(event.verdict.status === 'CONCLUSIVE' ? 'PENDING_APPROVAL' : event.verdict.status);
+                  }
+                } catch (e) {
+                  console.error("Error parsing event stream JSON:", e);
                 }
-              } catch (e) {
-                console.error("Error parsing event stream JSON:", e);
               }
             }
           }
         }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (err) {
       console.error("Investigation execution failed:", err);

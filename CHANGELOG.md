@@ -6,6 +6,21 @@ All major architectural decisions, branch operations, and code updates are docum
 
 ## 📅 [2026-09-02] — Ground Zero Setup & Architecture Blueprints
 
+### ⏱️ 18:05:00 IST (+05:30) — Comprehensive Security Hardening & Runtime Fault Tolerance Implemented
+- **Critical Vulnerability Remediations**:
+  - `main.py`: Fixed broken CORS configuration (`allow_origins` now enforces explicit origin allowlists rather than insecure `*` with credentials). Attached singleton `orchestrator` to `app.state`.
+  - `harness/agents/triage_agent.py`: Neutralized LLM prompt injection by encapsulating `operator_shift_notes` within strict untrusted delimiter fences and safety system instructions. Truncated anomaly arrays to top 10 items to prevent Gemma 4096 context window exhaustion.
+  - `web_backend/router.py`: Eliminated duplicate `InvestigationOrchestrator` construction by introducing FastAPI dependency injection (`get_orchestrator`). Added regex safety validation on `scenario_id` preventing path traversal.
+  - `harness/schemas.py`: Added 10MB payload size validator on `image_base64` to prevent edge memory DoS. Added note sanitizer and normalized `severity` fields to `Literal["CRITICAL", "HIGH", "MODERATE", "NOMINAL"]`.
+- **Runtime Fault Tolerance & Upgrades**:
+  - `web_backend/service.py`: Wrapped investigation lifecycle in robust `try...except` block, transitioning incidents to `"FAILED"` on fatal engine crash to prevent forever-stuck `"INVESTIGATING"` records.
+  - `harness/agents/vision_agent.py`: Added `vision_status` and error tracking to surface camera inspection failures.
+  - `harness/orchestrator.py`: Integrated `asyncio.Semaphore(2)` to throttle concurrent LLM executions and prevent edge VRAM over-allocation.
+  - `src/App.jsx`: Added a 2-minute `AbortController` timeout on frontend SSE connections.
+  - `tests/test_security_fixes.py`: Added 5 unit tests validating security patches (all 32 tests passing 100%).
+
+---
+
 ### ⏱️ 17:41:00 IST (+05:30) — Gemma Unified Brain & Qwen2.5-VL Multimodal Vision Agent Implemented
 - **Consolidated on Lean RAM-Optimized Architecture**:
   - `harness/ollama_client.py`: Configured Google Gemma (`gemma2:latest` / `gemma2:2b` / `gemma:4b`) as the unified brain for both the Main Reasoning Agents (Triage, Telemetry, Root Cause) AND the Adversarial Critic Agent, drastically cutting edge VRAM usage to < 6GB.

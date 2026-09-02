@@ -226,5 +226,5 @@ class AsyncOllamaClient:
                     confidence_penalty=0.0
                 )
 
-        # Generic fallback
-        return schema_class.model_construct()
+        # Generic fallback: raise loud error rather than returning corrupt empty instance
+        raise ValueError(f"Offline deterministic fallback is not implemented for schema: {schema_class.__name__}")
