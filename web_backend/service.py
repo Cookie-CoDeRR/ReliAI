@@ -45,32 +45,40 @@ class IncidentService:
         return record
 
     @staticmethod
-    async def investigate_incident(
+    async def stream_and_investigate_incident(
         db: AsyncSession,
-        incident_id: str,
-        orchestrator: InvestigationOrchestrator
-    ) -> InvestigationVerdict:
+        snapshot: MultimodalTelemetrySnapshot,
+        orchestrator: InvestigationOrchestrator,
+        incident_id: Optional[str] = None
+    ):
         """
-        Executes the autonomous AI investigation harness for an incident,
-        records all intermediate agent traces, and updates the incident record.
-        Wraps execution in robust try-except to ensure incident is never left stuck in INVESTIGATING.
+        Executes the autonomous AI investigation harness for an incident live,
+        yields each investigation event as an SSE object, records all intermediate
+        agent trace records, and updates the incident record upon completion.
         """
-        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
+        inc_id = incident_id
+        if not inc_id:
+            record = await IncidentService.ingest_incident(db=db, snapshot=snapshot)
+            inc_id = record.id
+
+        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == inc_id))
         incident = result.scalar_one_or_none()
         if not incident:
-            raise ValueError(f"Incident {incident_id} not found")
+            incident = await IncidentService.ingest_incident(
+                db=db,
+                snapshot=snapshot,
+                incident_id=inc_id
+            )
 
-        snapshot = MultimodalTelemetrySnapshot.model_validate(incident.telemetry_json)
         incident.status = "INVESTIGATING"
         await db.commit()
 
         final_verdict: Optional[InvestigationVerdict] = None
 
         try:
-            # Execute streaming run and record traces
-            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
+            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=inc_id):
                 trace = AgentTraceRecord(
-                    incident_id=incident_id,
+                    incident_id=inc_id,
                     agent_name=event.get("agent", "UNKNOWN"),
                     step_type=event.get("step", "TRACE"),
                     message=event.get("message"),
@@ -81,6 +89,8 @@ class IncidentService:
 
                 if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
                     final_verdict = InvestigationVerdict.model_validate(event["verdict"])
+
+                yield event
 
             if final_verdict:
                 incident.status = "PENDING_APPROVAL" if final_verdict.status == InvestigationStatus.CONCLUSIVE else final_verdict.status.value
@@ -99,13 +109,11 @@ class IncidentService:
 
             await db.commit()
             await db.refresh(incident)
-            return final_verdict
 
         except Exception as e:
-            # Prevent incident from being perpetually trapped in INVESTIGATING state
             incident.status = "FAILED"
             fail_trace = AgentTraceRecord(
-                incident_id=incident_id,
+                incident_id=inc_id,
                 agent_name="ORCHESTRATOR",
                 step_type="ERROR",
                 message=f"Investigation pipeline aborted due to runtime error: {str(e)}",
@@ -116,6 +124,36 @@ class IncidentService:
             await db.commit()
             await db.refresh(incident)
             raise e
+
+    @staticmethod
+    async def investigate_incident(
+        db: AsyncSession,
+        incident_id: str,
+        orchestrator: InvestigationOrchestrator
+    ) -> InvestigationVerdict:
+        """
+        Executes the autonomous AI investigation harness for an incident,
+        records all intermediate agent traces, and updates the incident record.
+        Reuses stream_and_investigate_incident for unified persistence logic.
+        """
+        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
+        incident = result.scalar_one_or_none()
+        if not incident:
+            raise ValueError(f"Incident {incident_id} not found")
+
+        snapshot = MultimodalTelemetrySnapshot.model_validate(incident.telemetry_json)
+        final_verdict: Optional[InvestigationVerdict] = None
+
+        async for event in IncidentService.stream_and_investigate_incident(
+            db=db,
+            snapshot=snapshot,
+            orchestrator=orchestrator,
+            incident_id=incident_id
+        ):
+            if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
+                final_verdict = InvestigationVerdict.model_validate(event["verdict"])
+
+        return final_verdict
 
     @staticmethod
     async def record_human_approval(

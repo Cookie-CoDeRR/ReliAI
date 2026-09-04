@@ -4,9 +4,10 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.ext.asyncio import AsyncSession
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
     InvestigationVerdict
@@ -14,7 +15,8 @@ from harness.schemas import (
 from harness.orchestrator import InvestigationOrchestrator
 from harness.ollama_client import AsyncOllamaClient
 from harness.baseline_engine import BaselineEngine
-from web_backend.database import init_db
+from web_backend.database import init_db, get_db
+from web_backend.service import IncidentService
 from web_backend.router import router as web_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -105,15 +107,25 @@ async def investigate_incident(snapshot: MultimodalTelemetrySnapshot, incident_i
 
 
 @app.post("/harness/investigate/stream")
-async def stream_incident_investigation(snapshot: MultimodalTelemetrySnapshot, incident_id: Optional[str] = None):
+async def stream_incident_investigation(
+    snapshot: MultimodalTelemetrySnapshot,
+    incident_id: Optional[str] = None,
+    db: AsyncSession = Depends(get_db)
+):
     """
     Server-Sent Events (SSE) streaming endpoint.
     Emits real-time progress events as each agent deliberates:
     Triage ➔ Evidence RAG ➔ Domain Analysis ➔ Root Cause ➔ Critic Falsification ➔ Confidence Engine.
+    Persists intermediate agent traces and verdict details to SQLite.
     """
     async def event_generator():
         try:
-            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
+            async for event in IncidentService.stream_and_investigate_incident(
+                db=db,
+                snapshot=snapshot,
+                orchestrator=orchestrator,
+                incident_id=incident_id
+            ):
                 yield f"data: {json.dumps(event)}\n\n"
             yield "event: complete\ndata: {}\n\n"
         except Exception as err:
