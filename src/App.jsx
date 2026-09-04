@@ -6,6 +6,12 @@ import AgentDeliberationGraph from './components/AgentDeliberationGraph';
 import MultimodalInspector from './components/MultimodalInspector';
 import CriticDebateView from './components/CriticDebateView';
 import HumanApprovalBar from './components/HumanApprovalBar';
+import {
+  fetchScenarios,
+  triggerScenarioInvestigation,
+  fetchIncidentDetails,
+  submitHumanApproval
+} from './services/api';
 
 export default function App() {
   const [scenarios, setScenarios] = useState([]);
@@ -25,8 +31,7 @@ export default function App() {
     if (autoTriggeredRef.current) return;
     autoTriggeredRef.current = true;
 
-    fetch('/api/v1/scenarios')
-      .then(res => res.json())
+    fetchScenarios()
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setScenarios(data);
@@ -52,13 +57,7 @@ export default function App() {
 
     try {
       // Load scenario telemetry for the dashboard
-      const presetRes = await fetch('/api/v1/scenarios');
-
-      if (!presetRes.ok) {
-        throw new Error("Could not load scenario presets");
-      }
-
-      const allPresets = await presetRes.json();
+      const allPresets = await fetchScenarios();
       const targetPreset = allPresets.find(
         s => s.scenario_id === scenarioId
       );
@@ -70,22 +69,7 @@ export default function App() {
       setTelemetry(targetPreset.snapshot);
 
       // Run investigation through the DB-persisting backend flow
-      const triggerRes = await fetch(
-        `/api/v1/scenarios/${encodeURIComponent(scenarioId)}/trigger`,
-        {
-          method: 'POST'
-        }
-      );
-
-      if (!triggerRes.ok) {
-        const errorText = await triggerRes.text();
-        throw new Error(
-          `Scenario investigation failed: ${triggerRes.status} ${errorText}`
-        );
-      }
-
-      const triggerData = await triggerRes.json();
-
+      const triggerData = await triggerScenarioInvestigation(scenarioId);
       const incidentId = triggerData.incident_id;
       const finalVerdict = triggerData.verdict;
 
@@ -102,13 +86,8 @@ export default function App() {
       );
 
       // Reload the persisted investigation traces from DB
-      const detailRes = await fetch(
-        `/api/v1/incidents/${incidentId}`
-      );
-
-      if (detailRes.ok) {
-        const detail = await detailRes.json();
-
+      try {
+        const detail = await fetchIncidentDetails(incidentId);
         const normalizedTraces = (
           detail.agent_traces || []
         ).map(trace => {
@@ -118,11 +97,12 @@ export default function App() {
               verdict: trace.payload
             };
           }
-
           return trace;
         });
 
         setAgentTraces(normalizedTraces);
+      } catch (e) {
+        console.warn("Could not fetch detailed traces:", e);
       }
 
     } catch (err) {
@@ -138,12 +118,7 @@ export default function App() {
     if (!currentIncidentId) return;
 
     try {
-      const res = await fetch(`/api/v1/incidents/${currentIncidentId}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, engineer_id, notes })
-      });
-      const data = await res.json();
+      const data = await submitHumanApproval(currentIncidentId, { action, engineer_id, notes });
       if (data.status === "ACTION_RECORDED") {
         if (action === "APPROVE") setStatus("APPROVED");
         if (action === "OVERRIDE") setStatus("OVERRIDDEN");
