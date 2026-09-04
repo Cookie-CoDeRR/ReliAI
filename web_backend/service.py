@@ -3,9 +3,9 @@ import uuid
 import asyncio
 import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, or_
+from sqlalchemy import select, desc, or_, func
 from web_backend.models import IncidentRecord, AgentTraceRecord, ApprovalAuditRecord
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
@@ -181,6 +181,119 @@ class IncidentService:
             _active_investigations.pop(incident_id, None)
 
     @staticmethod
+    async def stream_investigate_incident(
+        db: AsyncSession,
+        incident_id: str,
+        orchestrator: InvestigationOrchestrator
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Executes the streaming multi-agent investigation pipeline for an incident,
+        yielding events as they occur while persisting agent traces and updating
+        incident record in real-time.
+        """
+        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
+        incident = result.scalar_one_or_none()
+        if not incident:
+            raise ValueError(f"Incident {incident_id} not found")
+
+        snapshot = MultimodalTelemetrySnapshot.model_validate(incident.telemetry_json)
+        incident.status = "INVESTIGATING"
+        await db.commit()
+
+        curr_task = asyncio.current_task()
+        if curr_task:
+            _active_investigations[incident_id] = curr_task
+
+        yield {
+            "incident_id": incident_id,
+            "agent": "ORCHESTRATOR",
+            "step": "INITIALIZED",
+            "message": f"Investigation streaming started for incident {incident_id}",
+            "status": "INVESTIGATING",
+            "snapshot": incident.telemetry_json
+        }
+
+        final_verdict: Optional[InvestigationVerdict] = None
+        triage_domain: Optional[str] = None
+
+        try:
+            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
+                trace = AgentTraceRecord(
+                    incident_id=incident_id,
+                    agent_name=event.get("agent", "UNKNOWN"),
+                    step_type=event.get("step", "TRACE"),
+                    message=event.get("message"),
+                    payload_json=event.get("payload") or event.get("verdict"),
+                    created_at=datetime.datetime.now(datetime.timezone.utc)
+                )
+                db.add(trace)
+
+                if (event.get("agent") == "TRIAGE_AGENT"
+                        and event.get("step") == "COMPLETED"
+                        and isinstance(event.get("payload"), dict)):
+                    triage_domain = event["payload"].get("incident_domain")
+                    if triage_domain:
+                        incident.domain = triage_domain
+                        await db.commit()
+
+                if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
+                    final_verdict = InvestigationVerdict.model_validate(event["verdict"])
+
+                yield {
+                    **event,
+                    "incident_id": incident_id
+                }
+
+            if final_verdict:
+                incident.status = "PENDING_APPROVAL" if final_verdict.status == InvestigationStatus.CONCLUSIVE else final_verdict.status.value
+                incident.final_confidence_score = final_verdict.final_confidence_score
+                incident.contradiction_detected = len(final_verdict.critic_report.contradictions_detected) > 0
+                incident.recommended_mitigation = final_verdict.recommended_mitigation
+                incident.requires_human_inspection = final_verdict.requires_human_inspection
+                incident.verdict_json = final_verdict.model_dump()
+
+                if final_verdict.primary_root_cause:
+                    incident.root_cause_title = final_verdict.primary_root_cause.title
+                    incident.root_cause_description = final_verdict.primary_root_cause.description
+                    incident.affected_component = final_verdict.primary_root_cause.affected_component
+
+                if triage_domain:
+                    incident.domain = triage_domain
+            else:
+                incident.status = "FAILED"
+
+            await db.commit()
+            await db.refresh(incident)
+
+        except (Exception, asyncio.CancelledError) as e:
+            is_cancelled = isinstance(e, asyncio.CancelledError)
+            incident.status = "CANCELLED" if is_cancelled else "FAILED"
+            msg = "Investigation query was cancelled by client/system." if is_cancelled else f"Investigation pipeline aborted due to runtime error: {str(e)}"
+            fail_trace = AgentTraceRecord(
+                incident_id=incident_id,
+                agent_name="ORCHESTRATOR",
+                step_type="CANCELLED" if is_cancelled else "ERROR",
+                message=msg,
+                payload_json={"error": "Cancelled" if is_cancelled else str(e)},
+                created_at=datetime.datetime.now(datetime.timezone.utc)
+            )
+            db.add(fail_trace)
+            await db.commit()
+            await db.refresh(incident)
+            yield {
+                "incident_id": incident_id,
+                "agent": "ORCHESTRATOR",
+                "step": "ERROR",
+                "message": msg,
+                "status": incident.status
+            }
+            if is_cancelled:
+                raise
+            raise e
+        finally:
+            _active_investigations.pop(incident_id, None)
+
+    @staticmethod
     async def reinvestigate_with_followup(
         db: AsyncSession,
         incident_id: str,
@@ -320,6 +433,7 @@ class IncidentService:
             "title": incident.title,
             "severity": incident.severity,
             "status": incident.status,
+            "domain": incident.domain,
             "created_at": incident.created_at.isoformat() if incident.created_at else None,
             "telemetry": incident.telemetry_json,
             "root_cause_title": incident.root_cause_title,
@@ -359,3 +473,106 @@ class IncidentService:
                 with open(file, "r", encoding="utf-8") as f:
                     presets.append(json.load(f))
         return presets
+
+    @staticmethod
+    async def get_analytics_summary(db: AsyncSession) -> Dict[str, Any]:
+        """Calculates executive KPI metrics across all stored incidents and audits."""
+        total_res = await db.execute(select(func.count(IncidentRecord.id)))
+        total_incidents = total_res.scalar() or 0
+
+        # Status breakdown
+        status_res = await db.execute(
+            select(IncidentRecord.status, func.count(IncidentRecord.id)).group_by(IncidentRecord.status)
+        )
+        status_counts = {row[0]: row[1] for row in status_res.fetchall()}
+
+        # Average confidence
+        avg_res = await db.execute(
+            select(func.avg(IncidentRecord.final_confidence_score)).where(IncidentRecord.final_confidence_score.isnot(None))
+        )
+        avg_confidence = round(float(avg_res.scalar() or 0.0), 1)
+
+        # Contradictions
+        contra_res = await db.execute(
+            select(func.count(IncidentRecord.id)).where(IncidentRecord.contradiction_detected.is_(True))
+        )
+        contradictions_count = contra_res.scalar() or 0
+
+        # Total audits
+        audits_res = await db.execute(select(func.count(ApprovalAuditRecord.id)))
+        total_audits = audits_res.scalar() or 0
+
+        # Failed / Cancelled count
+        failed_count = status_counts.get("FAILED", 0) + status_counts.get("CANCELLED", 0)
+
+        # Conclusive / Pending approval rate
+        conclusive_count = (
+            status_counts.get("PENDING_APPROVAL", 0)
+            + status_counts.get("APPROVED", 0)
+            + status_counts.get("OVERRIDDEN", 0)
+            + status_counts.get("DISPATCHED_TECH", 0)
+        )
+        conclusive_rate = round((conclusive_count / total_incidents * 100.0), 1) if total_incidents > 0 else 0.0
+
+        return {
+            "total_incidents": total_incidents,
+            "conclusive_rate": conclusive_rate,
+            "average_confidence": avg_confidence,
+            "status_breakdown": status_counts,
+            "contradictions_detected": contradictions_count,
+            "total_audits": total_audits,
+            "failed_or_cancelled": failed_count
+        }
+
+    @staticmethod
+    async def get_domain_breakdown(db: AsyncSession) -> List[Dict[str, Any]]:
+        """Groups incidents by failure domain and calculates proportions."""
+        res = await db.execute(
+            select(
+                func.coalesce(IncidentRecord.domain, "UNKNOWN").label("dom"),
+                func.count(IncidentRecord.id)
+            ).group_by("dom").order_by(desc(func.count(IncidentRecord.id)))
+        )
+        rows = res.fetchall()
+        total = sum(r[1] for r in rows) or 1
+        return [
+            {
+                "domain": r[0],
+                "count": r[1],
+                "percentage": round((r[1] / total) * 100.0, 1)
+            }
+            for r in rows
+        ]
+
+    @staticmethod
+    async def get_confidence_distribution(db: AsyncSession) -> Dict[str, int]:
+        """Bins final confidence scores into percentage brackets for histogram display."""
+        res = await db.execute(
+            select(IncidentRecord.final_confidence_score).where(IncidentRecord.final_confidence_score.isnot(None))
+        )
+        scores = [float(row[0]) for row in res.fetchall()]
+        distribution = {
+            "90-100%": sum(1 for s in scores if s >= 90.0),
+            "80-89%": sum(1 for s in scores if 80.0 <= s < 90.0),
+            "70-79%": sum(1 for s in scores if 70.0 <= s < 80.0),
+            "60-69%": sum(1 for s in scores if 60.0 <= s < 70.0),
+            "<60%": sum(1 for s in scores if s < 60.0)
+        }
+        return distribution
+
+    @staticmethod
+    async def get_approval_breakdown(db: AsyncSession) -> Dict[str, Any]:
+        """Calculates breakdown of human engineer approval actions."""
+        res = await db.execute(
+            select(ApprovalAuditRecord.action, func.count(ApprovalAuditRecord.id)).group_by(ApprovalAuditRecord.action)
+        )
+        actions = {row[0]: row[1] for row in res.fetchall()}
+        total = sum(actions.values())
+        return {
+            "total_actions": total,
+            "actions": actions,
+            "approval_rate": round((actions.get("APPROVE", 0) / total * 100.0), 1) if total > 0 else 0.0,
+            "override_rate": round((actions.get("OVERRIDE", 0) / total * 100.0), 1) if total > 0 else 0.0,
+            "dispatch_rate": round((actions.get("DISPATCH_TECH", 0) / total * 100.0), 1) if total > 0 else 0.0
+        }
+

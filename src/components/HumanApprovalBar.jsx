@@ -49,17 +49,32 @@ export default function HumanApprovalBar({
         <div className="flex items-center gap-3 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-800">
           <div className="text-right">
             <div className="text-[10px] font-mono text-slate-400 uppercase">Verified Confidence</div>
-            <div className={`font-mono text-xl font-extrabold ${
-              confidenceScore >= 80 ? 'text-emerald-400' : confidenceScore <= 45 ? 'text-rose-400' : 'text-amber-400'
-            }`}>
-              {confidenceScore.toFixed(1)}%
-            </div>
+            {isProcessing && (!confidenceScore || confidenceScore === 0) ? (
+              <div className="h-6 w-16 bg-slate-800 rounded animate-pulse my-0.5" />
+            ) : (
+              <div className={`font-mono text-xl font-extrabold ${
+                confidenceScore >= 80 ? 'text-emerald-400' : confidenceScore <= 45 ? 'text-rose-400' : 'text-amber-400'
+              }`}>
+                {confidenceScore.toFixed(1)}%
+              </div>
+            )}
           </div>
           <div className="w-10 h-10 rounded-full border-2 border-slate-800 flex items-center justify-center font-mono text-xs">
-            {confidenceScore >= 80 ? '✓' : '!'}
+            {isProcessing ? <span className="w-3 h-3 rounded-full bg-indigo-400 animate-ping" /> : confidenceScore >= 80 ? '✓' : '!'}
           </div>
         </div>
       </div>
+
+      {/* In-Flight Processing Banner */}
+      {isProcessing && (
+        <div className="mb-4 py-2 px-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-xs font-mono text-indigo-300 flex items-center justify-between animate-pulse">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+            <span>AI Investigation & Adversarial Critic Audit in Progress...</span>
+          </div>
+          <span className="text-[11px] text-indigo-400/80 font-semibold">GATE LOCKED PENDING VERDICT</span>
+        </div>
+      )}
 
       {/* Recommended Mitigation Display */}
       {recommendedMitigation && (

@@ -30,9 +30,17 @@ orchestrator = InvestigationOrchestrator(ollama_client=ollama_client, baseline_e
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables & store singleton references
-    logger.info("Initializing SQLite/PostgreSQL database tables...")
-    await init_db()
+    # Startup: apply version-controlled Alembic migrations & verify tables
+    try:
+        from alembic.config import Config as AlembicConfig
+        from alembic import command as alembic_command
+        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic schema migrations applied (head).")
+    except Exception as mig_err:
+        logger.warning(f"Alembic migration warning: {mig_err}. Running init_db() fallback.")
+        await init_db()
+
 
     # --- Ghost record cleanup ---
     # Any incident stuck in INVESTIGATING at boot means the previous server process

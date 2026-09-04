@@ -1,7 +1,78 @@
 import React from 'react';
 import { GitCommit, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 
-export default function CriticDebateView({ rootCause = null, criticReport = null }) {
+export default function CriticDebateView({ rootCause = null, criticReport = null, isInvestigating = false }) {
+  if (isInvestigating && (!rootCause || !criticReport)) {
+    return (
+      <div className="glass-panel rounded-2xl p-5 border border-indigo-500/30 shadow-xl relative overflow-hidden">
+        {/* Top Shimmer Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 text-xs font-mono font-semibold text-indigo-400 uppercase tracking-wider">
+            <ShieldAlert className="w-4 h-4 text-indigo-400 animate-pulse" />
+            <span>Adversarial Debate & Anti-Hallucination Critic Loop</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/30 text-[10px] font-mono text-indigo-300 animate-pulse">
+            <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+            <span>AI HYPOTHESIS & CRITIC DELIBERATION IN FLIGHT...</span>
+          </div>
+        </div>
+
+        {/* Skeleton Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Left Skeleton: Root Cause Generator */}
+          <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800 space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="h-4 bg-slate-800 rounded w-48" />
+              <div className="h-4 bg-slate-800 rounded w-16" />
+            </div>
+            <div className="h-5 bg-slate-800/90 rounded w-3/4" />
+            <div className="space-y-2">
+              <div className="h-3 bg-slate-800/60 rounded w-full" />
+              <div className="h-3 bg-slate-800/60 rounded w-5/6" />
+            </div>
+            <div className="space-y-2 pt-2">
+              <div className="h-3 bg-slate-800/40 rounded w-32" />
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-slate-800" />
+                <div className="h-3 bg-slate-800/50 rounded grow" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-slate-800" />
+                <div className="h-3 bg-slate-800/50 rounded grow" />
+              </div>
+            </div>
+            <div className="pt-3 border-t border-slate-800/60 flex items-center gap-2">
+              <div className="h-4 bg-slate-800/50 rounded w-20" />
+              <div className="h-4 bg-cyan-950/40 border border-cyan-800/40 rounded w-16" />
+              <div className="h-4 bg-cyan-950/40 border border-cyan-800/40 rounded w-16" />
+            </div>
+          </div>
+
+          {/* Right Skeleton: Adversarial Critic */}
+          <div className="bg-slate-900/60 rounded-xl p-4 border border-slate-800 space-y-4 animate-pulse">
+            <div className="flex items-center justify-between">
+              <div className="h-4 bg-slate-800 rounded w-44" />
+              <div className="h-4 bg-slate-800 rounded w-20" />
+            </div>
+            <div className="h-5 bg-amber-950/30 border border-amber-800/30 rounded w-2/3" />
+            <div className="space-y-2">
+              <div className="h-3 bg-slate-800/60 rounded w-full" />
+              <div className="h-3 bg-slate-800/60 rounded w-4/5" />
+            </div>
+            <div className="space-y-2 pt-2">
+              <div className="h-3 bg-slate-800/40 rounded w-36" />
+              <div className="h-10 bg-slate-800/40 rounded w-full" />
+            </div>
+            <div className="pt-3 border-t border-slate-800/60 flex items-center gap-2">
+              <div className="h-4 bg-slate-800/50 rounded w-28" />
+              <div className="h-4 bg-emerald-950/40 border border-emerald-800/40 rounded w-24" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!rootCause && !criticReport) {
     return (
       <div className="glass-panel rounded-2xl p-6 border border-slate-800 text-center text-slate-500 font-mono text-xs">

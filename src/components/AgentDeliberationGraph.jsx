@@ -25,6 +25,13 @@ const AGENT_STEPS = [
 export default function AgentDeliberationGraph({ agentTraces = [], activeAgent = null, isInvestigating = false }) {
   const [expandedAgent, setExpandedAgent] = useState('CRITIC_AGENT');
 
+  React.useEffect(() => {
+    if (isInvestigating && activeAgent) {
+      setExpandedAgent(activeAgent);
+    }
+  }, [isInvestigating, activeAgent]);
+
+
   return (
     <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl flex flex-col h-full">
       <div className="flex items-center justify-between mb-4">
@@ -52,11 +59,11 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
           return (
             <div
               key={step.id}
-              className={`rounded-xl border transition-all ${
+              className={`rounded-xl border transition-all duration-300 ${
                 isDone 
                   ? 'bg-slate-900/90 border-slate-700/80 shadow-md' 
                   : isCurrentActive
-                    ? 'bg-indigo-950/40 border-indigo-500/80 ring-1 ring-indigo-400'
+                    ? 'bg-gradient-to-r from-indigo-950/70 to-slate-900/90 border-indigo-500 ring-2 ring-indigo-500/50 shadow-lg shadow-indigo-950/60'
                     : 'bg-slate-950/40 border-slate-800/40 opacity-50'
               }`}
             >
@@ -66,8 +73,8 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
                 className="p-3 flex items-center justify-between cursor-pointer select-none"
               >
                 <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-slate-950 border ${
-                    isDone ? step.color : isCurrentActive ? 'text-indigo-400 border-indigo-400 animate-bounce' : 'text-slate-600 border-slate-800'
+                  <div className={`p-2 rounded-lg bg-slate-950 border transition-all ${
+                    isDone ? step.color : isCurrentActive ? 'text-indigo-300 border-indigo-400 bg-indigo-950/80 ring-2 ring-indigo-400/40 animate-pulse' : 'text-slate-600 border-slate-800'
                   }`}>
                     <Icon className="w-4 h-4" />
                   </div>
@@ -75,7 +82,12 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
                     <div className="text-xs font-heading font-semibold text-white flex items-center gap-2">
                       <span>{step.name}</span>
                       {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
-                      {isCurrentActive && <span className="text-[10px] font-mono text-indigo-400 animate-pulse">REASONING...</span>}
+                      {isCurrentActive && (
+                        <span className="text-[10px] font-mono text-indigo-300 bg-indigo-900/40 px-2 py-0.5 rounded border border-indigo-500/40 animate-pulse flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
+                          DELIBERATING...
+                        </span>
+                      )}
                     </div>
                     <p className="text-[11px] text-slate-400 font-mono">{step.desc}</p>
                   </div>

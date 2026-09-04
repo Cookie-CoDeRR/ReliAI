@@ -1,7 +1,7 @@
 import React from 'react';
-import { Shield, Activity, Cpu, AlertTriangle, CheckCircle2, RotateCcw, Radio, Clock } from 'lucide-react';
+import { Shield, Activity, Cpu, AlertTriangle, CheckCircle2, RotateCcw, Radio, Clock, BarChart3 } from 'lucide-react';
 
-export default function Header({ status, isInvestigating, onReset, onOpenHistory, stationId = "STATION-TIRE-FITTER-01" }) {
+export default function Header({ status, isInvestigating, onReset, onOpenHistory, onOpenAnalytics, stationId = "STATION-TIRE-FITTER-01" }) {
   return (
     <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
       {/* Brand & Station Info */}
@@ -58,6 +58,16 @@ export default function Header({ status, isInvestigating, onReset, onOpenHistory
             </>
           )}
         </div>
+
+        {/* Analytics Dashboard Button */}
+        <button
+          onClick={onOpenAnalytics}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/40 hover:border-indigo-400 text-indigo-300 hover:text-white text-xs font-mono transition cursor-pointer"
+          title="View Fleet Investigation Analytics"
+        >
+          <BarChart3 className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="hidden sm:inline">Analytics</span>
+        </button>
 
         {/* History Log Button */}
         <button

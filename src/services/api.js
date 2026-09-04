@@ -93,3 +93,97 @@ export async function fetchIncidents(params = {}) {
   return response.json();
 }
 
+export async function streamScenarioInvestigation(
+  scenarioId,
+  { onEvent, onError, onComplete, signal } = {}
+) {
+  const response = await fetch(
+    `${API_BASE_URL}/api/v1/scenarios/${encodeURIComponent(scenarioId)}/stream`,
+    {
+      method: "POST",
+      headers: { Accept: "text/event-stream" },
+      signal
+    }
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    const err = new Error(`Investigation streaming failed: ${response.status} ${errText}`);
+    if (onError) onError(err);
+    throw err;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop(); // Keep incomplete tail in buffer
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (line.startsWith("data: ")) {
+          const dataStr = line.slice(6).trim();
+          if (dataStr) {
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (onEvent) onEvent(parsed);
+            } catch (err) {
+              console.warn("Failed to parse SSE data chunk:", dataStr, err);
+            }
+          }
+        } else if (line.startsWith("event: complete")) {
+          if (onComplete) onComplete();
+        }
+      }
+    }
+    if (onComplete) onComplete();
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      if (onError) onError(err);
+      throw err;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+export async function fetchAnalyticsSummary() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/summary`);
+  if (!response.ok) {
+    throw new Error(`Failed to load analytics summary: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchDomainBreakdown() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/domain-breakdown`);
+  if (!response.ok) {
+    throw new Error(`Failed to load domain breakdown: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchConfidenceDistribution() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/confidence-distribution`);
+  if (!response.ok) {
+    throw new Error(`Failed to load confidence distribution: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchApprovalBreakdown() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/analytics/approval-breakdown`);
+  if (!response.ok) {
+    throw new Error(`Failed to load approval breakdown: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+

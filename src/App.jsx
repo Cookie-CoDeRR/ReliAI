@@ -7,9 +7,11 @@ import MultimodalInspector from './components/MultimodalInspector';
 import CriticDebateView from './components/CriticDebateView';
 import HumanApprovalBar from './components/HumanApprovalBar';
 import IncidentHistoryDrawer from './components/IncidentHistoryDrawer';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 import {
   fetchScenarios,
   triggerScenarioInvestigation,
+  streamScenarioInvestigation,
   fetchIncidentDetails,
   submitHumanApproval
 } from './services/api';
@@ -26,7 +28,9 @@ export default function App() {
   const [verdict, setVerdict] = useState(null);
   const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const autoTriggeredRef = useRef(false);
+  const currentAbortRef = useRef(null);
 
   // Load scenarios only once and auto-trigger Scenario 1
   useEffect(() => {
@@ -44,72 +48,142 @@ export default function App() {
   }, []);
 
   const handleTriggerScenario = async (scenarioId) => {
+    // Abort any in-flight stream
+    if (currentAbortRef.current) {
+      currentAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    currentAbortRef.current = abortController;
+
     setActiveScenarioId(scenarioId);
     setIsInvestigating(true);
     setStatus("INVESTIGATING");
     setAgentTraces([]);
     setActiveAgent("TRIAGE_AGENT");
     setVerdict(null);
-
-    if (scenarioId.includes("THERMAL") || scenarioId.includes("CONTRADICTORY")) {
-      setActiveFaultJoint("Joint_3");
-    } else {
-      setActiveFaultJoint(null);
-    }
+    setActiveFaultJoint(null);
 
     try {
-      // Load scenario telemetry for the dashboard
+      // Pre-populate telemetry from presets
       const allPresets = await fetchScenarios();
-      const targetPreset = allPresets.find(
-        s => s.scenario_id === scenarioId
-      );
-
-      if (!targetPreset) {
-        throw new Error(`Scenario not found: ${scenarioId}`);
+      const targetPreset = allPresets.find(s => s.scenario_id === scenarioId);
+      if (targetPreset) {
+        setTelemetry(targetPreset.snapshot);
       }
 
-      setTelemetry(targetPreset.snapshot);
+      // Stream the multi-agent investigation in real-time
+      let streamedIncidentId = null;
+      let finalVerdictReceived = null;
 
-      // Run investigation through the DB-persisting backend flow
-      const triggerData = await triggerScenarioInvestigation(scenarioId);
-      const incidentId = triggerData.incident_id;
-      const finalVerdict = triggerData.verdict;
-
-      setCurrentIncidentId(incidentId);
-      setVerdict(finalVerdict);
-
-      setStatus(
-        triggerData.status ||
-        (
-          finalVerdict?.status === "CONCLUSIVE"
-            ? "PENDING_APPROVAL"
-            : finalVerdict?.status
-        )
-      );
-
-      // Reload the persisted investigation traces from DB
       try {
-        const detail = await fetchIncidentDetails(incidentId);
-        const normalizedTraces = (
-          detail.agent_traces || []
-        ).map(trace => {
-          if (trace.step === "FINAL_VERDICT") {
-            return {
-              ...trace,
-              verdict: trace.payload
-            };
-          }
-          return trace;
-        });
+        await streamScenarioInvestigation(scenarioId, {
+          signal: abortController.signal,
+          onEvent: (event) => {
+            if (event.incident_id) {
+              streamedIncidentId = event.incident_id;
+              setCurrentIncidentId(event.incident_id);
+            }
 
-        setAgentTraces(normalizedTraces);
-      } catch (e) {
-        console.warn("Could not fetch detailed traces:", e);
+            // Track active agent in pipeline
+            if (event.agent) {
+              if (event.step === "STARTED") {
+                setActiveAgent(event.agent);
+              }
+            }
+
+            // Progressively accumulate or update agent trace records
+            if (event.agent) {
+              setAgentTraces((prev) => {
+                const existingIdx = prev.findIndex(t => t.agent === event.agent);
+                const normalized = {
+                  agent: event.agent,
+                  step: event.step,
+                  message: event.message,
+                  payload: event.payload || event.verdict,
+                  verdict: event.verdict || event.payload,
+                  created_at: event.created_at || new Date().toISOString()
+                };
+
+                if (existingIdx >= 0) {
+                  // Replace started placeholder with completed payload
+                  if (event.step === "COMPLETED" || event.step === "FINAL_VERDICT") {
+                    const nextTraces = [...prev];
+                    nextTraces[existingIdx] = normalized;
+                    return nextTraces;
+                  }
+                  return prev;
+                }
+                return [...prev, normalized];
+              });
+            }
+
+            // Immediate 3D fault joint highlighting on Triage evaluation
+            if (event.agent === "TRIAGE_AGENT" && event.step === "COMPLETED") {
+              const payload = event.payload || {};
+              const containment = (payload.immediate_containment_action || "").toLowerCase();
+              const domain = (payload.incident_domain || "").toLowerCase();
+
+              if (containment.includes("joint 3") || containment.includes("joint_3") || domain.includes("thermal") || scenarioId.includes("THERMAL")) {
+                setActiveFaultJoint("Joint_3");
+              } else if (containment.includes("joint 1") || containment.includes("joint_1")) {
+                setActiveFaultJoint("Joint_1");
+              } else if (containment.includes("joint 2") || containment.includes("joint_2")) {
+                setActiveFaultJoint("Joint_2");
+              } else if (containment.includes("joint 4") || containment.includes("joint_4")) {
+                setActiveFaultJoint("Joint_4");
+              } else if (containment.includes("joint 5") || containment.includes("joint_5")) {
+                setActiveFaultJoint("Joint_5");
+              } else if (containment.includes("joint 6") || containment.includes("joint_6")) {
+                setActiveFaultJoint("Joint_6");
+              }
+            }
+
+            // Final verdict arrived
+            if (event.step === "FINAL_VERDICT" && event.verdict) {
+              finalVerdictReceived = event.verdict;
+              setVerdict(finalVerdictReceived);
+              setStatus(
+                finalVerdictReceived.status === "CONCLUSIVE"
+                  ? "PENDING_APPROVAL"
+                  : finalVerdictReceived.status
+              );
+              setActiveAgent(null);
+
+              const comp = (finalVerdictReceived.primary_root_cause?.affected_component || "").toLowerCase();
+              if (comp.includes("joint 3") || comp.includes("joint_3") || comp.includes("harmonic")) {
+                setActiveFaultJoint("Joint_3");
+              }
+            }
+          },
+          onError: (err) => {
+            console.warn("SSE stream error, falling back to sync endpoint:", err);
+          },
+          onComplete: () => {
+            setIsInvestigating(false);
+            setActiveAgent(null);
+          }
+        });
+      } catch (streamErr) {
+        if (streamErr.name === "AbortError") return;
+        console.warn("Streaming threw error, falling back to sync:", streamErr);
+
+        // Fallback to synchronous endpoint
+        const triggerData = await triggerScenarioInvestigation(scenarioId);
+        setCurrentIncidentId(triggerData.incident_id);
+        setVerdict(triggerData.verdict);
+        setStatus(
+          triggerData.status ||
+          (triggerData.verdict?.status === "CONCLUSIVE" ? "PENDING_APPROVAL" : triggerData.verdict?.status)
+        );
+        const detail = await fetchIncidentDetails(triggerData.incident_id);
+        setAgentTraces(detail.agent_traces || []);
       }
 
     } catch (err) {
-      console.error("Investigation execution failed:", err);
-      setStatus("FAILED");
+      if (err.name !== "AbortError") {
+        console.error("Investigation execution failed:", err);
+        setStatus("FAILED");
+      }
     } finally {
       setIsInvestigating(false);
       setActiveAgent(null);
@@ -169,6 +243,7 @@ export default function App() {
         isInvestigating={isInvestigating}
         onReset={() => handleTriggerScenario(activeScenarioId)}
         onOpenHistory={() => setIsHistoryOpen(true)}
+        onOpenAnalytics={() => setIsAnalyticsOpen(true)}
       />
 
       {/* Main Command Center Layout */}
@@ -211,6 +286,7 @@ export default function App() {
         <CriticDebateView
           rootCause={verdict?.primary_root_cause}
           criticReport={verdict?.critic_report}
+          isInvestigating={isInvestigating}
         />
 
         {/* Bottom Sticky Action Gateway: Human-in-the-Loop Sign-off */}
@@ -228,6 +304,12 @@ export default function App() {
         isOpen={isHistoryOpen}
         onClose={() => setIsHistoryOpen(false)}
         onSelectIncident={handleSelectIncident}
+      />
+
+      {/* Fleet Analytics & Metric Overview Modal */}
+      <AnalyticsDashboard
+        isOpen={isAnalyticsOpen}
+        onClose={() => setIsAnalyticsOpen(false)}
       />
     </div>
   );
