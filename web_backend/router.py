@@ -101,12 +101,23 @@ async def ingest_incident(req: IngestIncidentRequest, db: AsyncSession = Depends
 @router.get("/incidents")
 async def list_incidents(
     status: Optional[str] = Query(None, description="Filter by status (e.g. DETECTED, PENDING_APPROVAL, APPROVED)"),
+    station_id: Optional[str] = Query(None, description="Filter by station ID"),
+    severity: Optional[str] = Query(None, description="Filter by severity (e.g. CRITICAL, HIGH, MEDIUM, LOW)"),
+    search: Optional[str] = Query(None, description="Case-insensitive search matching incident ID, title, root cause, or affected component"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    """Lists incidents with optional status filtering."""
-    incidents = await IncidentService.list_incidents(db=db, status=status, limit=limit, offset=offset)
+    """Lists incidents with optional status, station_id, severity, and search filtering."""
+    incidents = await IncidentService.list_incidents(
+        db=db,
+        status=status,
+        station_id=station_id,
+        severity=severity,
+        search=search,
+        limit=limit,
+        offset=offset
+    )
     return [
         {
             "id": i.id,

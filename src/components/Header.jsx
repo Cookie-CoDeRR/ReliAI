@@ -1,7 +1,7 @@
 import React from 'react';
-import { Shield, Activity, Cpu, AlertTriangle, CheckCircle2, RotateCcw, Radio } from 'lucide-react';
+import { Shield, Activity, Cpu, AlertTriangle, CheckCircle2, RotateCcw, Radio, Clock } from 'lucide-react';
 
-export default function Header({ status, isInvestigating, onReset, stationId = "STATION-TIRE-FITTER-01" }) {
+export default function Header({ status, isInvestigating, onReset, onOpenHistory, stationId = "STATION-TIRE-FITTER-01" }) {
   return (
     <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
       {/* Brand & Station Info */}
@@ -59,10 +59,20 @@ export default function Header({ status, isInvestigating, onReset, stationId = "
           )}
         </div>
 
+        {/* History Log Button */}
+        <button
+          onClick={onOpenHistory}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/40 text-cyan-400 hover:text-cyan-300 text-xs font-mono transition cursor-pointer"
+          title="View Incident History & Audits"
+        >
+          <Clock className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">History Log</span>
+        </button>
+
         {/* Reset / Reload Button */}
         <button
           onClick={onReset}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 hover:text-white text-xs font-mono transition cursor-pointer"
           title="Reset Active Incident"
         >
           <RotateCcw className="w-3.5 h-3.5" />

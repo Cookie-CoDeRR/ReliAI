@@ -6,6 +6,7 @@ import AgentDeliberationGraph from './components/AgentDeliberationGraph';
 import MultimodalInspector from './components/MultimodalInspector';
 import CriticDebateView from './components/CriticDebateView';
 import HumanApprovalBar from './components/HumanApprovalBar';
+import IncidentHistoryDrawer from './components/IncidentHistoryDrawer';
 
 export default function App() {
   const [scenarios, setScenarios] = useState([]);
@@ -18,6 +19,7 @@ export default function App() {
   const [telemetry, setTelemetry] = useState({});
   const [verdict, setVerdict] = useState(null);
   const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const autoTriggeredRef = useRef(false);
 
   // Load scenarios only once and auto-trigger Scenario 1
@@ -134,6 +136,33 @@ export default function App() {
     }
   };
 
+  const handleSelectIncident = (detail) => {
+    if (!detail) return;
+    setCurrentIncidentId(detail.id);
+    setStatus(detail.status);
+    setTelemetry(detail.telemetry || {});
+    setVerdict(detail.verdict);
+
+    const normalizedTraces = (detail.agent_traces || []).map(trace => {
+      if (trace.step === "FINAL_VERDICT") {
+        return {
+          ...trace,
+          verdict: trace.payload
+        };
+      }
+      return trace;
+    });
+    setAgentTraces(normalizedTraces);
+
+    const rootCauseTitle = detail.root_cause_title || detail.verdict?.primary_root_cause?.title || "";
+    const incTitle = detail.title || "";
+    if (rootCauseTitle.includes("Joint 3") || incTitle.includes("Thermal") || incTitle.includes("Contradictory")) {
+      setActiveFaultJoint("Joint_3");
+    } else {
+      setActiveFaultJoint(null);
+    }
+  };
+
   const handleHumanAction = async ({ action, engineer_id, notes }) => {
     if (!currentIncidentId) return;
 
@@ -164,6 +193,7 @@ export default function App() {
         status={status}
         isInvestigating={isInvestigating}
         onReset={() => handleTriggerScenario(activeScenarioId)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
       />
 
       {/* Main Command Center Layout */}
@@ -217,6 +247,13 @@ export default function App() {
           isProcessing={isInvestigating}
         />
       </main>
+
+      {/* Slide-over Investigation History Drawer */}
+      <IncidentHistoryDrawer
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectIncident={handleSelectIncident}
+      />
     </div>
   );
 }

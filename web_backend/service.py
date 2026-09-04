@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from web_backend.models import IncidentRecord, AgentTraceRecord, ApprovalAuditRecord
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
@@ -157,13 +157,31 @@ class IncidentService:
     async def list_incidents(
         db: AsyncSession,
         status: Optional[str] = None,
+        station_id: Optional[str] = None,
+        severity: Optional[str] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[IncidentRecord]:
-        """Lists incidents sorted by newest first."""
-        query = select(IncidentRecord).order_by(desc(IncidentRecord.created_at)).offset(offset).limit(limit)
+        """Lists incidents sorted by newest first with optional filtering and search."""
+        query = select(IncidentRecord).order_by(desc(IncidentRecord.created_at))
         if status:
             query = query.where(IncidentRecord.status == status)
+        if station_id:
+            query = query.where(IncidentRecord.station_id == station_id)
+        if severity:
+            query = query.where(IncidentRecord.severity == severity)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    IncidentRecord.id.ilike(search_pattern),
+                    IncidentRecord.title.ilike(search_pattern),
+                    IncidentRecord.root_cause_title.ilike(search_pattern),
+                    IncidentRecord.affected_component.ilike(search_pattern)
+                )
+            )
+        query = query.offset(offset).limit(limit)
         result = await db.execute(query)
         return list(result.scalars().all())
 
