@@ -1,3 +1,6 @@
+import InvestigationPanel from "./components/InvestigationPanel";
+import { analyzeIncident } from "./services/api";
+import { mockIncident } from "./data/mockIncident";
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -10,6 +13,22 @@ export default function App() {
   const [activeMode, setActiveMode] = useState('human-follow');
   const [isLevitating, setIsLevitating] = useState(true);
   const [isEStop, setIsEStop] = useState(false);
+  const [analysis, setAnalysis] = useState(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
+
+  const handleAnalyzeIncident = async () => {
+    try {
+      setAnalysisLoading(true);
+
+      const result = await analyzeIncident(mockIncident);
+
+      setAnalysis(result);
+    } catch (error) {
+      console.error('ReliAI investigation failed:', error);
+    } finally {
+      setAnalysisLoading(false);
+    }
+  };
 
   // Joint Angles (Degrees) for the 6-DOF KUKA Arm
   const [jointAngles, setJointAngles] = useState({
@@ -20,7 +39,7 @@ export default function App() {
     j5: 0.0,    // Wrist Pitch
     j6: 0.0,    // Tool Flange
   });
-
+  
   const controlsRef = useRef(null);
   const mousePositionRef = useRef({ x: 0, y: 0 });
 
@@ -136,8 +155,19 @@ export default function App() {
             isLevitating={isLevitating}
             isEStop={isEStop}
           />
+
+          <InvestigationPanel
+            analysis={analysis}
+            loading={analysisLoading}
+            onAnalyze={handleAnalyzeIncident}
+          />
         </main>
       </div>
     </div>
   );
+  
 }
+
+
+
+

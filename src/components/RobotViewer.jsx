@@ -114,7 +114,7 @@ function LevitationPlinth({ isLevitating }) {
 
 // Rigged KUKA GLB Model Component with Armature Data and Dynamic Kinematics
 function LoadedKukaModel({ mousePositionRef, activeMode, jointAngles, setJointAngles, isLevitating }) {
-  const { scene, nodes } = useGLTF('/kuka_robot.glb');
+  const { scene, nodes } = useGLTF('/roboticArm.glb');
 
   // Store rest quaternions to prevent gimbal lock flips
   const restQuats = useRef({});
@@ -481,4 +481,4 @@ export default function RobotViewer({
 }
 
 // Preload the GLTF asset
-useGLTF.preload('/kuka_robot.glb');
+useGLTF.preload('/roboticArm.glb')
