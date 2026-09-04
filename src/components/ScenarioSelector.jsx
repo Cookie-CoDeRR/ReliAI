@@ -5,7 +5,7 @@ const SCENARIOS = [
   {
     id: "SCENARIO-01-THERMAL-OVERHEAT",
     title: "Joint 3 Thermal Overheat",
-    subtitle: "Harmonic Gear Friction (88.5°C)",
+    subtitle: "Harmonic Gear Friction (88.5Â°C)",
     icon: Flame,
     color: "from-rose-500/20 to-rose-600/10 border-rose-500/30 text-rose-300 hover:border-rose-400"
   },
@@ -19,7 +19,7 @@ const SCENARIOS = [
   {
     id: "SCENARIO-03-CONTRADICTORY-FAULT",
     title: "Contradictory Sensor Anomaly",
-    subtitle: "False 92°C vs 3.1A Idle Current",
+    subtitle: "False 92Â°C vs 3.1A Idle Current",
     icon: AlertOctagon,
     color: "from-amber-500/20 to-amber-600/10 border-amber-500/30 text-amber-300 hover:border-amber-400"
   },
@@ -34,8 +34,8 @@ const SCENARIOS = [
 
 export default function ScenarioSelector({ activeScenarioId, onSelectScenario, isInvestigating }) {
   return (
-    <div className="glass-panel rounded-2xl p-4 border border-slate-800">
-      <div className="flex items-center justify-between mb-3">
+    <div className="glass-panel rounded-xl p-3 border border-slate-800">
+      <div className="flex items-center justify-between mb-2">
         <div className="text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
           <Play className="w-3.5 h-3.5 text-cyan-400" />
           <span>Industrial Incident Scenarios (Preset Benchmarks)</span>
@@ -43,7 +43,7 @@ export default function ScenarioSelector({ activeScenarioId, onSelectScenario, i
         <span className="text-[10px] font-mono text-slate-500">SELECT TO RUN AI HARNESS</span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
         {SCENARIOS.map((sc) => {
           const Icon = sc.icon;
           const isSelected = activeScenarioId === sc.id;
@@ -53,14 +53,14 @@ export default function ScenarioSelector({ activeScenarioId, onSelectScenario, i
               key={sc.id}
               onClick={() => onSelectScenario(sc.id)}
               disabled={isInvestigating}
-              className={`text-left p-3.5 rounded-xl border bg-gradient-to-b transition-all relative overflow-hidden flex flex-col justify-between ${
+              className={`text-left p-2.5 rounded-lg border bg-gradient-to-b transition-all relative overflow-hidden flex flex-col justify-between ${
                 sc.color
-              } ${isSelected ? 'ring-2 ring-cyan-400 shadow-lg shadow-cyan-950/50 scale-[1.02]' : 'opacity-85 hover:opacity-100'} ${
+              } ${isSelected ? 'ring-1 ring-cyan-400 shadow-md shadow-cyan-950/40' : 'opacity-85 hover:opacity-100'} ${
                 isInvestigating ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
               }`}
             >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="p-2 rounded-lg bg-slate-900/80 border border-slate-700/50 shrink-0">
+              <div className="flex items-start justify-between gap-2 mb-1.5">
+                <div className="p-1.5 rounded-md bg-slate-900/80 border border-slate-700/50 shrink-0">
                   <Icon className="w-4 h-4" />
                 </div>
                 {isSelected && (
@@ -70,8 +70,8 @@ export default function ScenarioSelector({ activeScenarioId, onSelectScenario, i
                 )}
               </div>
               <div>
-                <h4 className="font-heading font-semibold text-sm text-white leading-tight">{sc.title}</h4>
-                <p className="text-[11px] text-slate-400 mt-0.5 font-mono">{sc.subtitle}</p>
+                <h4 className="font-heading font-semibold text-[13px] text-white leading-tight">{sc.title}</h4>
+                <p className="text-[10px] text-slate-400 mt-0.5 font-mono">{sc.subtitle}</p>
               </div>
             </button>
           );
@@ -80,3 +80,5 @@ export default function ScenarioSelector({ activeScenarioId, onSelectScenario, i
     </div>
   );
 }
+
+

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
+import IncidentSummary from './components/IncidentSummary';
 import RobotViewer from './components/RobotViewer';
 import ScenarioSelector from './components/ScenarioSelector';
 import AgentDeliberationGraph from './components/AgentDeliberationGraph';
@@ -172,7 +173,15 @@ export default function App() {
       />
 
       {/* Main Command Center Layout */}
-      <main className="grow p-4 md:p-6 space-y-5 max-w-[1700px] w-full mx-auto">
+      <main className="grow p-4 md:p-5 space-y-4 max-w-[1650px] w-full mx-auto">
+        <IncidentSummary
+          scenarioId={activeScenarioId}
+          incidentId={currentIncidentId}
+          status={status}
+          verdict={verdict}
+          isInvestigating={isInvestigating}
+        />
+
         {/* Scenario Benchmark Bar */}
         <ScenarioSelector
           activeScenarioId={activeScenarioId}
@@ -204,6 +213,7 @@ export default function App() {
               activeAgent={activeAgent}
               isInvestigating={isInvestigating}
             />
+
           </div>
         </div>
 
@@ -216,7 +226,7 @@ export default function App() {
         {/* Bottom Sticky Action Gateway: Human-in-the-Loop Sign-off */}
         <HumanApprovalBar
           status={status}
-          confidenceScore={verdict?.final_confidence_score || 88.5}
+          confidenceScore={verdict?.final_confidence_score ?? 0}
           recommendedMitigation={verdict?.recommended_mitigation}
           onAction={handleHumanAction}
           isProcessing={isInvestigating}

@@ -51,8 +51,8 @@ function RobotArmModel({ activeFaultJoint, jointsData, isLevitating = false }) {
     <primitive
       ref={robotRef}
       object={scene}
-      scale={1.2}
-      position={[0, -0.5, 0]}
+      scale={1.75}
+      position={[0, -0.78, 0]}
     />
   );
 }
@@ -61,7 +61,7 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
   const [showWireframe, setShowWireframe] = useState(false);
 
   return (
-    <div className="relative w-full h-[460px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
+    <div className="relative w-full h-[400px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
       {/* HUD Header */}
       <div className="absolute top-4 left-4 z-10 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-2 bg-slate-900/85 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-700/80 text-xs font-mono text-cyan-400">
@@ -78,7 +78,7 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
       </div>
 
       {/* 3D Canvas */}
-      <Canvas shadows camera={{ position: [2.8, 2.2, 3.2], fov: 42 }}>
+      <Canvas dpr={[1, 1.5]} shadows camera={{ position: [2.05, 1.55, 2.35], fov: 36 }} gl={{ powerPreference: "high-performance", antialias: true }}>
         <ambientLight intensity={0.7} />
         <directionalLight position={[5, 8, 5]} intensity={1.8} castShadow />
         <pointLight position={[-3, 2, -2]} color="#06b6d4" intensity={2} />
@@ -92,13 +92,13 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
           isLevitating={isLevitating}
         />
 
-        <ContactShadows position={[0, -0.51, 0]} opacity={0.65} scale={10} blur={2.2} />
-        <OrbitControls enablePan={true} maxPolarAngle={Math.PI / 2 + 0.05} minDistance={1.5} maxDistance={7.0} />
+        <ContactShadows position={[0, -0.79, 0]} opacity={0.45} scale={8} blur={2.5} />
+        <OrbitControls target={[0, 0.35, 0]} enablePan={true} enableDamping={true} dampingFactor={0.08} maxPolarAngle={Math.PI / 2 + 0.05} minDistance={1.1} maxDistance={5.0} />
         <Environment preset="city" />
       </Canvas>
 
       {/* Floating Joint Overlay Badges */}
-      <div className="absolute bottom-3 left-3 right-3 z-10 grid grid-cols-3 sm:grid-cols-6 gap-2">
+      <div className="absolute bottom-2 left-2 right-2 z-10 grid grid-cols-3 sm:grid-cols-6 gap-2">
         {["Joint_1", "Joint_2", "Joint_3", "Joint_4", "Joint_5", "Joint_6"].map((jKey, idx) => {
           const jData = jointsData[jKey];
           const isFault = activeFaultJoint && activeFaultJoint.toLowerCase().includes(jKey.toLowerCase());
@@ -117,7 +117,7 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
                 <span>J{idx + 1}</span>
                 {isOverheat && <Flame className="w-3 h-3 text-rose-400 animate-bounce" />}
               </div>
-              <div className="font-semibold">{jData ? `${jData.temp_c.toFixed(1)}°C` : '42.0°C'}</div>
+              <div className="font-semibold">{jData ? `${jData.temp_c.toFixed(1)}Â°C` : '42.0Â°C'}</div>
               <div className="text-[9px] text-slate-500">{jData ? `${jData.torque_nm.toFixed(0)} Nm` : '120 Nm'}</div>
             </div>
           );
@@ -128,4 +128,5 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
 }
 
 useGLTF.preload('/roboticArm.glb');
+
 

@@ -4,7 +4,7 @@ import { GitCommit, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, ArrowRigh
 export default function CriticDebateView({ rootCause = null, criticReport = null }) {
   if (!rootCause && !criticReport) {
     return (
-      <div className="glass-panel rounded-2xl p-6 border border-slate-800 text-center text-slate-500 font-mono text-xs">
+      <div className="glass-panel rounded-xl p-4 border border-slate-800 text-center text-slate-500 font-mono text-xs">
         Select a scenario or trigger investigation to view the Adversarial Reasoning Debate.
       </div>
     );
@@ -13,8 +13,8 @@ export default function CriticDebateView({ rootCause = null, criticReport = null
   const hasContradictions = criticReport?.contradictions_detected?.length > 0;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
+    <div className="glass-panel rounded-xl p-4 border border-slate-800 shadow-xl">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
           <ShieldAlert className="w-4 h-4 text-amber-400" />
           <span>Adversarial Debate & Anti-Hallucination Critic Loop</span>
@@ -28,9 +28,9 @@ export default function CriticDebateView({ rootCause = null, criticReport = null
         </span>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Left: Generator Hypothesis */}
-        <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 flex flex-col justify-between">
+        <div className="bg-slate-900/90 rounded-lg p-3.5 border border-slate-800 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-xs font-mono text-indigo-400 mb-2 font-semibold">
               <span className="flex items-center gap-1.5">
@@ -43,7 +43,7 @@ export default function CriticDebateView({ rootCause = null, criticReport = null
             <h3 className="font-heading font-bold text-sm text-white mb-1.5">
               {rootCause?.title || "Evaluating Telemetry..."}
             </h3>
-            <p className="text-xs text-slate-300 font-mono leading-relaxed mb-3">
+            <p className="text-xs text-slate-300 font-mono leading-5 mb-2">
               {rootCause?.description || "Awaiting multi-agent telemetry synthesis."}
             </p>
 
@@ -75,7 +75,7 @@ export default function CriticDebateView({ rootCause = null, criticReport = null
         </div>
 
         {/* Right: Adversarial Critic Audit */}
-        <div className={`rounded-xl p-4 border flex flex-col justify-between ${
+        <div className={`rounded-lg p-3.5 border flex flex-col justify-between ${
           hasContradictions 
             ? 'bg-amber-950/30 border-amber-500/50' 
             : 'bg-slate-900/90 border-slate-800'
@@ -107,7 +107,7 @@ export default function CriticDebateView({ rootCause = null, criticReport = null
               </div>
             </div>
 
-            <p className="text-xs text-slate-300 font-mono leading-relaxed mb-3">
+            <p className="text-xs text-slate-300 font-mono leading-5 mb-2">
               {criticReport?.objection_summary || "Performing sensor cross-validation."}
             </p>
 

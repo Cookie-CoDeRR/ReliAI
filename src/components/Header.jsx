@@ -3,21 +3,21 @@ import { Shield, Activity, Cpu, AlertTriangle, CheckCircle2, RotateCcw, Radio, C
 
 export default function Header({ status, isInvestigating, onReset, onOpenHistory, stationId = "STATION-TIRE-FITTER-01" }) {
   return (
-    <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <header className="sticky top-0 z-50 glass-panel border-b border-slate-800/80 px-4 md:px-5 py-2.5 flex flex-wrap items-center justify-between gap-4">
       {/* Brand & Station Info */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
             <Shield className="w-5 h-5 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-heading font-extrabold text-lg text-white tracking-wide">ReliAI</span>
+              <span className="font-heading font-extrabold text-base text-white tracking-wide">ReliAI</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
                 HARNESS v1.0
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">Industrial Investigation & Anti-Hallucination Command Center</p>
+            <p className="text-[10px] text-slate-500 hidden lg:block">Industrial Investigation & Anti-Hallucination Command Center</p>
           </div>
         </div>
 
