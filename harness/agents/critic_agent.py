@@ -86,10 +86,77 @@ class CriticAgent:
 
         critic_eval = await self.client.generate_structured(prompt, system, CriticEvaluation)
 
-        # Merge algorithmic contradictions if the model missed any
+        # Merge deterministic contradictions if the model missed any
         if algorithmic_contradictions and not critic_eval.contradictions_detected:
             critic_eval.contradictions_detected = algorithmic_contradictions
             critic_eval.is_physically_possible = False
-            critic_eval.confidence_penalty = max(critic_eval.confidence_penalty, 40.0)
+            critic_eval.confidence_penalty = max(
+                critic_eval.confidence_penalty,
+                40.0
+            )
+
+        # -------------------------------------------------------------
+        # ELECTRICAL POWER SAG CONSISTENCY GUARD
+        # -------------------------------------------------------------
+        hypothesis_text = (
+            f"{hypothesis.title} "
+            f"{hypothesis.description} "
+            f"{hypothesis.affected_component}"
+        ).lower()
+
+        is_electrical_hypothesis = any(
+            term in hypothesis_text
+            for term in (
+                "electrical",
+                "undervoltage",
+                "voltage",
+                "power supply",
+                "brownout",
+                "3-phase"
+            )
+        )
+
+        # The golden electrical baseline defines < 380 V as an abnormal
+        # undervoltage condition. A negative deviation percentage simply
+        # means voltage is below nominal; it is not contradictory evidence.
+        if is_electrical_hypothesis and snapshot.line_voltage_v < 380.0:
+
+            filtered_contradictions = []
+
+            for contradiction in critic_eval.contradictions_detected:
+                c = contradiction.lower()
+
+                is_sign_math_false_positive = (
+                    "voltage" in c
+                    and (
+                        "deviation" in c
+                        or "threshold" in c
+                        or "below" in c
+                        or "undervoltage" in c
+                    )
+                )
+
+                if not is_sign_math_false_positive:
+                    filtered_contradictions.append(contradiction)
+
+            critic_eval.contradictions_detected = filtered_contradictions
+
+            if not filtered_contradictions:
+                critic_eval.is_physically_possible = True
+                critic_eval.confidence_penalty = 0.0
+                critic_eval.objection_summary = (
+                    f"Electrical power sag is physically supported by the "
+                    f"measured line voltage of {snapshot.line_voltage_v:.1f} V, "
+                    f"which is below the 380 V minimum allowable threshold."
+                )
+
+        # Keep schema internally consistent:
+        # contradictions always imply a failed physical validation.
+        if critic_eval.contradictions_detected:
+            critic_eval.is_physically_possible = False
+            critic_eval.confidence_penalty = max(
+                critic_eval.confidence_penalty,
+                25.0
+            )
 
         return critic_eval

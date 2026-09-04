@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
 import RobotViewer from './components/RobotViewer';
 import ScenarioSelector from './components/ScenarioSelector';
@@ -18,9 +18,13 @@ export default function App() {
   const [telemetry, setTelemetry] = useState({});
   const [verdict, setVerdict] = useState(null);
   const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
+  const autoTriggeredRef = useRef(false);
 
-  // Load preset scenarios on mount and auto-trigger Scenario 1
+  // Load scenarios only once and auto-trigger Scenario 1
   useEffect(() => {
+    if (autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
+
     fetch('/api/v1/scenarios')
       .then(res => res.json())
       .then(data => {
@@ -35,11 +39,11 @@ export default function App() {
   const handleTriggerScenario = async (scenarioId) => {
     setActiveScenarioId(scenarioId);
     setIsInvestigating(true);
+    setStatus("INVESTIGATING");
     setAgentTraces([]);
     setActiveAgent("TRIAGE_AGENT");
     setVerdict(null);
 
-    // Identify fault joint for 3D visualizer
     if (scenarioId.includes("THERMAL") || scenarioId.includes("CONTRADICTORY")) {
       setActiveFaultJoint("Joint_3");
     } else {
@@ -47,78 +51,83 @@ export default function App() {
     }
 
     try {
-      // 1. Fetch scenario JSON preset
+      // Load scenario telemetry for the dashboard
       const presetRes = await fetch('/api/v1/scenarios');
+
+      if (!presetRes.ok) {
+        throw new Error("Could not load scenario presets");
+      }
+
       const allPresets = await presetRes.json();
-      const targetPreset = allPresets.find(s => s.scenario_id === scenarioId);
+      const targetPreset = allPresets.find(
+        s => s.scenario_id === scenarioId
+      );
 
-      if (targetPreset) {
-        setTelemetry(targetPreset.snapshot);
+      if (!targetPreset) {
+        throw new Error(`Scenario not found: ${scenarioId}`);
       }
 
-      // 2. Ingest incident in database
-      const ingestRes = await fetch('/api/v1/incidents/ingest', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: targetPreset?.title || `Incident from ${scenarioId}`,
-          severity: targetPreset?.expected_outcome === "CONCLUSIVE" ? "CRITICAL" : "HIGH",
-          snapshot: targetPreset?.snapshot
-        })
-      });
-      const ingestData = await ingestRes.json();
-      const incId = ingestData.incident_id;
-      setCurrentIncidentId(incId);
+      setTelemetry(targetPreset.snapshot);
 
-      // 3. Connect to live SSE investigation stream with a 2-minute safety timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
-
-      const response = await fetch(`/harness/investigate/stream?incident_id=${incId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(targetPreset?.snapshot),
-        signal: controller.signal
-      });
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      try {
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n\n');
-          buffer = lines.pop(); // Keep incomplete chunk
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const rawJson = line.replace('data: ', '').trim();
-              if (rawJson && rawJson !== '{}') {
-                try {
-                  const event = JSON.parse(rawJson);
-                  setActiveAgent(event.agent);
-                  setAgentTraces(prev => [...prev, event]);
-
-                  if (event.step === 'FINAL_VERDICT' && event.verdict) {
-                    setVerdict(event.verdict);
-                    setStatus(event.verdict.status === 'CONCLUSIVE' ? 'PENDING_APPROVAL' : event.verdict.status);
-                  }
-                } catch (e) {
-                  console.error("Error parsing event stream JSON:", e);
-                }
-              }
-            }
-          }
+      // Run investigation through the DB-persisting backend flow
+      const triggerRes = await fetch(
+        `/api/v1/scenarios/${encodeURIComponent(scenarioId)}/trigger`,
+        {
+          method: 'POST'
         }
-      } finally {
-        clearTimeout(timeoutId);
+      );
+
+      if (!triggerRes.ok) {
+        const errorText = await triggerRes.text();
+        throw new Error(
+          `Scenario investigation failed: ${triggerRes.status} ${errorText}`
+        );
       }
+
+      const triggerData = await triggerRes.json();
+
+      const incidentId = triggerData.incident_id;
+      const finalVerdict = triggerData.verdict;
+
+      setCurrentIncidentId(incidentId);
+      setVerdict(finalVerdict);
+
+      setStatus(
+        triggerData.status ||
+        (
+          finalVerdict?.status === "CONCLUSIVE"
+            ? "PENDING_APPROVAL"
+            : finalVerdict?.status
+        )
+      );
+
+      // Reload the persisted investigation traces from DB
+      const detailRes = await fetch(
+        `/api/v1/incidents/${incidentId}`
+      );
+
+      if (detailRes.ok) {
+        const detail = await detailRes.json();
+
+        const normalizedTraces = (
+          detail.agent_traces || []
+        ).map(trace => {
+          if (trace.step === "FINAL_VERDICT") {
+            return {
+              ...trace,
+              verdict: trace.payload
+            };
+          }
+
+          return trace;
+        });
+
+        setAgentTraces(normalizedTraces);
+      }
+
     } catch (err) {
       console.error("Investigation execution failed:", err);
+      setStatus("FAILED");
     } finally {
       setIsInvestigating(false);
       setActiveAgent(null);

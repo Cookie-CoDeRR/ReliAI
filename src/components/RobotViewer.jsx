@@ -1,11 +1,11 @@
-import React, { useRef, useEffect, useState } from 'react';
+﻿import React, { useRef, useEffect, useState } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, useGLTF, Environment, ContactShadows, Float, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { Eye, Flame, Activity, Zap } from 'lucide-react';
 
 function RobotArmModel({ activeFaultJoint, jointsData, isLevitating = false }) {
-  const { scene } = useGLTF('/kuka_robot.glb');
+  const { scene } = useGLTF('/roboticArm.glb');
   const robotRef = useRef();
 
   useEffect(() => {
@@ -117,7 +117,7 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
                 <span>J{idx + 1}</span>
                 {isOverheat && <Flame className="w-3 h-3 text-rose-400 animate-bounce" />}
               </div>
-              <div className="font-semibold">{jData ? `${jData.temp_c.toFixed(1)}°C` : '42.0°C'}</div>
+              <div className="font-semibold">{jData ? `${jData.temp_c.toFixed(1)}Â°C` : '42.0Â°C'}</div>
               <div className="text-[9px] text-slate-500">{jData ? `${jData.torque_nm.toFixed(0)} Nm` : '120 Nm'}</div>
             </div>
           );
@@ -127,4 +127,5 @@ export default function RobotViewer({ activeFaultJoint = null, jointsData = {}, 
   );
 }
 
-useGLTF.preload('/kuka_robot.glb');
+useGLTF.preload('/roboticArm.glb');
+
