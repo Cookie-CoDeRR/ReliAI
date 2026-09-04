@@ -1,0 +1,97 @@
+{
+  "station_type": "6-DOF Robotic Tire Conveyor & Fitting Cell",
+  "station_id_prefix": "STATION-TIRE-FITTER",
+  "joints": {
+    "Joint_1": {
+      "name": "Base Turntable",
+      "max_torque_nm": 350.0,
+      "nominal_current_a": 3.2,
+      "max_current_a": 6.5,
+      "max_temp_c": 65.0,
+      "warning_temp_c": 55.0
+    },
+    "Joint_2": {
+      "name": "Shoulder Pitch",
+      "max_torque_nm": 480.0,
+      "nominal_current_a": 4.5,
+      "max_current_a": 8.0,
+      "max_temp_c": 70.0,
+      "warning_temp_c": 60.0
+    },
+    "Joint_3": {
+      "name": "Elbow Pitch",
+      "max_torque_nm": 320.0,
+      "nominal_current_a": 3.8,
+      "max_current_a": 7.0,
+      "max_temp_c": 68.0,
+      "warning_temp_c": 58.0
+    },
+    "Joint_4": {
+      "name": "Wrist Roll",
+      "max_torque_nm": 140.0,
+      "nominal_current_a": 1.9,
+      "max_current_a": 4.0,
+      "max_temp_c": 60.0,
+      "warning_temp_c": 50.0
+    },
+    "Joint_5": {
+      "name": "Wrist Pitch",
+      "max_torque_nm": 120.0,
+      "nominal_current_a": 1.6,
+      "max_current_a": 3.5,
+      "max_temp_c": 60.0,
+      "warning_temp_c": 50.0
+    },
+    "Joint_6": {
+      "name": "Tool Flange / Gripper",
+      "max_torque_nm": 90.0,
+      "nominal_current_a": 1.2,
+      "max_current_a": 2.8,
+      "max_temp_c": 55.0,
+      "warning_temp_c": 48.0
+    }
+  },
+  "conveyor": {
+    "nominal_belt_speed_mps": 0.5,
+    "min_belt_speed_mps": 0.35,
+    "max_belt_speed_mps": 0.75,
+    "nominal_tension_n": 320.0,
+    "min_tension_n": 240.0,
+    "max_tension_n": 420.0,
+    "max_vfd_current_a": 5.2
+  },
+  "bead_lubrication": {
+    "nominal_pressure_bar": 3.5,
+    "min_pressure_bar": 2.5,
+    "max_pressure_bar": 4.5,
+    "min_flow_rate_lpm": 0.30,
+    "min_tank_level_pct": 20.0
+  },
+  "electrical": {
+    "nominal_line_voltage_v": 400.0,
+    "min_allowed_voltage_v": 380.0,
+    "max_allowed_voltage_v": 420.0,
+    "nominal_total_current_a": 14.5,
+    "max_allowed_total_current_a": 24.0
+  },
+  "pneumatic": {
+    "nominal_pressure_bar": 6.2,
+    "min_allowed_pressure_bar": 5.5,
+    "max_allowed_pressure_bar": 7.0
+  },
+  "tire_fitment": {
+    "max_radial_offset_mm": 0.8,
+    "max_angular_deviation_deg": 0.35,
+    "target_seating_torque_nm": 125.0,
+    "torque_tolerance_nm": 5.0,
+    "min_inflation_burst_pressure_bar": 3.2,
+    "max_radial_runout_mm": 0.9,
+    "max_lateral_runout_mm": 0.7
+  },
+  "acoustic": {
+    "nominal_harmonics_hz": [120.0, 240.0, 480.0],
+    "max_ambient_noise_db": 78.0,
+    "bearing_fault_frequency_band_hz": [2200.0, 3500.0],
+    "pneumatic_hiss_band_hz": [4500.0, 7000.0]
+  }
+}

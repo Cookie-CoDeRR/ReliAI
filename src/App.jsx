@@ -1,143 +1,234 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
-import Sidebar from './components/Sidebar';
 import RobotViewer from './components/RobotViewer';
-import TelemetryPanels from './components/TelemetryPanels';
-import { ShieldAlert } from 'lucide-react';
+import ScenarioSelector from './components/ScenarioSelector';
+import AgentDeliberationGraph from './components/AgentDeliberationGraph';
+import MultimodalInspector from './components/MultimodalInspector';
+import CriticDebateView from './components/CriticDebateView';
+import HumanApprovalBar from './components/HumanApprovalBar';
+import IncidentHistoryDrawer from './components/IncidentHistoryDrawer';
+import {
+  fetchScenarios,
+  triggerScenarioInvestigation,
+  fetchIncidentDetails,
+  submitHumanApproval
+} from './services/api';
 
 export default function App() {
-  const [activeNav, setActiveNav] = useState('overview');
-  const [activeMode, setActiveMode] = useState('human-follow');
-  const [isLevitating, setIsLevitating] = useState(true);
-  const [isEStop, setIsEStop] = useState(false);
+  const [scenarios, setScenarios] = useState([]);
+  const [activeScenarioId, setActiveScenarioId] = useState("SCENARIO-01-THERMAL-OVERHEAT");
+  const [currentIncidentId, setCurrentIncidentId] = useState(null);
+  const [status, setStatus] = useState("PENDING_APPROVAL");
+  const [isInvestigating, setIsInvestigating] = useState(false);
+  const [activeAgent, setActiveAgent] = useState(null);
+  const [agentTraces, setAgentTraces] = useState([]);
+  const [telemetry, setTelemetry] = useState({});
+  const [verdict, setVerdict] = useState(null);
+  const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const autoTriggeredRef = useRef(false);
 
-  // Joint Angles (Degrees) for the 6-DOF KUKA Arm
-  const [jointAngles, setJointAngles] = useState({
-    j1: 0.0,    // Base Yaw
-    j2: 0.0,    // Shoulder Pitch
-    j3: 0.0,    // Elbow / Ankle Pitch
-    j4: 0.0,    // Wrist Roll
-    j5: 0.0,    // Wrist Pitch
-    j6: 0.0,    // Tool Flange
-  });
+  // Load scenarios only once and auto-trigger Scenario 1
+  useEffect(() => {
+    if (autoTriggeredRef.current) return;
+    autoTriggeredRef.current = true;
 
-  const controlsRef = useRef(null);
-  const mousePositionRef = useRef({ x: 0, y: 0 });
+    fetchScenarios()
+      .then(data => {
+        if (Array.isArray(data) && data.length > 0) {
+          setScenarios(data);
+          handleTriggerScenario("SCENARIO-01-THERMAL-OVERHEAT");
+        }
+      })
+      .catch(err => console.error("Error loading scenarios:", err));
+  }, []);
 
-  // Reset 3D Camera View to default perspective
-  const handleResetView = () => {
-    if (controlsRef.current) {
-      controlsRef.current.reset();
+  const handleTriggerScenario = async (scenarioId) => {
+    setActiveScenarioId(scenarioId);
+    setIsInvestigating(true);
+    setStatus("INVESTIGATING");
+    setAgentTraces([]);
+    setActiveAgent("TRIAGE_AGENT");
+    setVerdict(null);
+
+    if (scenarioId.includes("THERMAL") || scenarioId.includes("CONTRADICTORY")) {
+      setActiveFaultJoint("Joint_3");
+    } else {
+      setActiveFaultJoint(null);
+    }
+
+    try {
+      // Load scenario telemetry for the dashboard
+      const allPresets = await fetchScenarios();
+      const targetPreset = allPresets.find(
+        s => s.scenario_id === scenarioId
+      );
+
+      if (!targetPreset) {
+        throw new Error(`Scenario not found: ${scenarioId}`);
+      }
+
+      setTelemetry(targetPreset.snapshot);
+
+      // Run investigation through the DB-persisting backend flow
+      const triggerData = await triggerScenarioInvestigation(scenarioId);
+      const incidentId = triggerData.incident_id;
+      const finalVerdict = triggerData.verdict;
+
+      setCurrentIncidentId(incidentId);
+      setVerdict(finalVerdict);
+
+      setStatus(
+        triggerData.status ||
+        (
+          finalVerdict?.status === "CONCLUSIVE"
+            ? "PENDING_APPROVAL"
+            : finalVerdict?.status
+        )
+      );
+
+      // Reload the persisted investigation traces from DB
+      try {
+        const detail = await fetchIncidentDetails(incidentId);
+        const normalizedTraces = (
+          detail.agent_traces || []
+        ).map(trace => {
+          if (trace.step === "FINAL_VERDICT") {
+            return {
+              ...trace,
+              verdict: trace.payload
+            };
+          }
+          return trace;
+        });
+
+        setAgentTraces(normalizedTraces);
+      } catch (e) {
+        console.warn("Could not fetch detailed traces:", e);
+      }
+
+    } catch (err) {
+      console.error("Investigation execution failed:", err);
+      setStatus("FAILED");
+    } finally {
+      setIsInvestigating(false);
+      setActiveAgent(null);
     }
   };
 
-  // Trajectory & Calibrate Animation Loop
-  useEffect(() => {
-    if (isEStop || activeMode === 'manual' || activeMode === 'human-follow') return;
+  const handleSelectIncident = (detail) => {
+    if (!detail) return;
+    setCurrentIncidentId(detail.id);
+    setStatus(detail.status);
+    setTelemetry(detail.telemetry || {});
+    setVerdict(detail.verdict);
 
-    let frameId;
-    let startTime = Date.now();
-
-    const animateJoints = () => {
-      const elapsed = (Date.now() - startTime) / 1000;
-
-      if (activeMode === 'trajectory') {
-        // Pre-computed kinematic trajectory spline
-        setJointAngles({
-          j1: Math.sin(elapsed * 1.5) * 45,
-          j2: -25 + Math.sin(elapsed * 1.2) * 20,
-          j3: 35 + Math.cos(elapsed * 1.4) * 25,
-          j4: Math.sin(elapsed * 2.0) * 60,
-          j5: -15 + Math.sin(elapsed * 1.8) * 30,
-          j6: Math.cos(elapsed * 2.5) * 90,
-        });
-      } else if (activeMode === 'calibrate') {
-        // Smooth homing to zero position
-        setJointAngles((prev) => ({
-          j1: prev.j1 * 0.92,
-          j2: prev.j2 * 0.92,
-          j3: prev.j3 * 0.92,
-          j4: prev.j4 * 0.92,
-          j5: prev.j5 * 0.92,
-          j6: prev.j6 * 0.92,
-        }));
+    const normalizedTraces = (detail.agent_traces || []).map(trace => {
+      if (trace.step === "FINAL_VERDICT") {
+        return {
+          ...trace,
+          verdict: trace.payload
+        };
       }
+      return trace;
+    });
+    setAgentTraces(normalizedTraces);
 
-      frameId = requestAnimationFrame(animateJoints);
-    };
+    const rootCauseTitle = detail.root_cause_title || detail.verdict?.primary_root_cause?.title || "";
+    const incTitle = detail.title || "";
+    if (rootCauseTitle.includes("Joint 3") || incTitle.includes("Thermal") || incTitle.includes("Contradictory")) {
+      setActiveFaultJoint("Joint_3");
+    } else {
+      setActiveFaultJoint(null);
+    }
+  };
 
-    frameId = requestAnimationFrame(animateJoints);
-    return () => cancelAnimationFrame(frameId);
-  }, [activeMode, isEStop]);
+  const handleHumanAction = async ({ action, engineer_id, notes }) => {
+    if (!currentIncidentId) return;
+
+    try {
+      const data = await submitHumanApproval(currentIncidentId, { action, engineer_id, notes });
+      if (data.status === "ACTION_RECORDED") {
+        if (action === "APPROVE") setStatus("APPROVED");
+        if (action === "OVERRIDE") setStatus("OVERRIDDEN");
+        if (action === "DISPATCH_TECH") setStatus("DISPATCHED_TECH");
+      }
+    } catch (e) {
+      console.error("Error recording human approval:", e);
+    }
+  };
+
+  const hasThermalFault = activeScenarioId?.includes("THERMAL") || activeScenarioId?.includes("CONTRADICTORY");
+  const hasAcousticFault = activeScenarioId?.includes("THERMAL") || activeScenarioId?.includes("PNEUMATIC");
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#070b14] text-slate-100 overflow-hidden font-sans select-none">
-      {/* Top Navigation Header */}
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30">
+      {/* Header Bar */}
       <Header
-        activeMode={activeMode}
-        setActiveMode={setActiveMode}
-        isEStop={isEStop}
-        setIsEStop={setIsEStop}
-        onResetView={handleResetView}
-        isLevitating={isLevitating}
-        setIsLevitating={setIsLevitating}
+        status={status}
+        isInvestigating={isInvestigating}
+        onReset={() => handleTriggerScenario(activeScenarioId)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
       />
 
-      {/* Main Workspace Area */}
-      <div className="flex flex-1 relative overflow-hidden">
-        {/* Sidebar Diagnostics & Controls */}
-        <Sidebar
-          activeNav={activeNav}
-          setActiveNav={setActiveNav}
-          activeMode={activeMode}
-          setActiveMode={setActiveMode}
-          jointAngles={jointAngles}
-          setJointAngles={setJointAngles}
+      {/* Main Command Center Layout */}
+      <main className="grow p-4 md:p-6 space-y-5 max-w-[1700px] w-full mx-auto">
+        {/* Scenario Benchmark Bar */}
+        <ScenarioSelector
+          activeScenarioId={activeScenarioId}
+          onSelectScenario={handleTriggerScenario}
+          isInvestigating={isInvestigating}
         />
 
-        {/* Central 3D Viewport with Modular Telemetry Overlays */}
-        <main className="flex-1 relative bg-[#050811] overflow-hidden">
-          {/* Emergency Stop Lockout Overlay */}
-          {isEStop && (
-            <div className="absolute inset-0 bg-red-950/70 backdrop-blur-md z-40 flex flex-col items-center justify-center space-y-4 text-center p-6 animate-pulse">
-              <div className="p-4 rounded-full bg-red-600/30 border-2 border-red-500 glow-rose">
-                <ShieldAlert className="w-16 h-16 text-red-400" />
-              </div>
-              <h2 className="text-3xl font-black font-mono tracking-widest text-white uppercase">
-                EMERGENCY STOP ENGAGED
-              </h2>
-              <p className="text-sm font-mono text-red-200 max-w-md">
-                Hardware motor power rails disengaged. All actuators locked in mechanical brake state.
-              </p>
-              <button
-                onClick={() => setIsEStop(false)}
-                className="px-6 py-2.5 bg-red-600 hover:bg-red-500 text-white font-mono font-bold text-xs uppercase tracking-wider rounded-lg border border-red-400 transition-all cursor-pointer shadow-lg glow-rose"
-              >
-                Clear Safety Interlock & Resume
-              </button>
-            </div>
-          )}
+        {/* Primary Workspace: 3D Twin (Left) + Multi-Agent Reasoning Graph (Right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Column: 3D Robotic Arm Twin & Multimodal Inspector */}
+          <div className="lg:col-span-7 space-y-5 flex flex-col">
+            <RobotViewer
+              activeFaultJoint={activeFaultJoint}
+              jointsData={telemetry.joints || {}}
+              isLevitating={isInvestigating}
+            />
 
-          {/* 3D Robot Viewer Canvas */}
-          <RobotViewer
-            jointAngles={jointAngles}
-            setJointAngles={setJointAngles}
-            activeMode={activeMode}
-            isLevitating={isLevitating}
-            controlsRef={controlsRef}
-            mousePositionRef={mousePositionRef}
-          />
+            <MultimodalInspector
+              telemetry={telemetry}
+              hasThermalFault={hasThermalFault}
+              hasAcousticFault={hasAcousticFault}
+            />
+          </div>
 
-          {/* Modular Telemetry Panels Overlay */}
-          <TelemetryPanels
-            jointAngles={jointAngles}
-            setJointAngles={setJointAngles}
-            activeMode={activeMode}
-            isLevitating={isLevitating}
-            isEStop={isEStop}
-          />
-        </main>
-      </div>
+          {/* Right Column: Multi-Agent Deliberation Graph */}
+          <div className="lg:col-span-5 flex flex-col">
+            <AgentDeliberationGraph
+              agentTraces={agentTraces}
+              activeAgent={activeAgent}
+              isInvestigating={isInvestigating}
+            />
+          </div>
+        </div>
+
+        {/* Secondary Row: Adversarial Debate Breakdown */}
+        <CriticDebateView
+          rootCause={verdict?.primary_root_cause}
+          criticReport={verdict?.critic_report}
+        />
+
+        {/* Bottom Sticky Action Gateway: Human-in-the-Loop Sign-off */}
+        <HumanApprovalBar
+          status={status}
+          confidenceScore={verdict?.final_confidence_score || 88.5}
+          recommendedMitigation={verdict?.recommended_mitigation}
+          onAction={handleHumanAction}
+          isProcessing={isInvestigating}
+        />
+      </main>
+
+      {/* Slide-over Investigation History Drawer */}
+      <IncidentHistoryDrawer
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        onSelectIncident={handleSelectIncident}
+      />
     </div>
   );
 }
