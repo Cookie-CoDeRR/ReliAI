@@ -23,11 +23,11 @@ const AGENT_STEPS = [
 ];
 
 export default function AgentDeliberationGraph({ agentTraces = [], activeAgent = null, isInvestigating = false }) {
-  const [expandedAgent, setExpandedAgent] = useState('CRITIC_AGENT');
+  const [expandedAgent, setExpandedAgent] = useState(null);
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl flex flex-col h-full">
-      <div className="flex items-center justify-between mb-4">
+    <div className="glass-panel rounded-xl p-4 border border-slate-800 shadow-xl flex flex-col h-full">
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
           <Activity className="w-4 h-4 text-indigo-400" />
           <span>Multi-Agent Deliberation Pipeline</span>
@@ -41,7 +41,7 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
       </div>
 
       {/* Pipeline Node Tree */}
-      <div className="space-y-2.5 overflow-y-auto pr-1 max-h-[520px]">
+      <div className="space-y-1.5 overflow-y-auto pr-1 max-h-[445px]">
         {AGENT_STEPS.map((step, idx) => {
           const Icon = step.icon;
           const matchingTrace = agentTraces.find(t => t.agent === step.id && (t.step === 'COMPLETED' || t.step === 'FINAL_VERDICT'));
@@ -52,7 +52,7 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
           return (
             <div
               key={step.id}
-              className={`rounded-xl border transition-all ${
+              className={`rounded-lg border transition-all ${
                 isDone 
                   ? 'bg-slate-900/90 border-slate-700/80 shadow-md' 
                   : isCurrentActive
@@ -63,10 +63,10 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
               {/* Header Bar */}
               <div 
                 onClick={() => setExpandedAgent(isExpanded ? null : step.id)}
-                className="p-3 flex items-center justify-between cursor-pointer select-none"
+                className="p-2.5 flex items-center justify-between cursor-pointer select-none"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg bg-slate-950 border ${
+                <div className="flex items-center gap-2.5">
+                  <div className={`p-1.5 rounded-md bg-slate-950 border ${
                     isDone ? step.color : isCurrentActive ? 'text-indigo-400 border-indigo-400 animate-bounce' : 'text-slate-600 border-slate-800'
                   }`}>
                     <Icon className="w-4 h-4" />
@@ -77,7 +77,7 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
                       {isDone && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
                       {isCurrentActive && <span className="text-[10px] font-mono text-indigo-400 animate-pulse">REASONING...</span>}
                     </div>
-                    <p className="text-[11px] text-slate-400 font-mono">{step.desc}</p>
+                    <p className="text-[10px] text-slate-500 font-mono">{step.desc}</p>
                   </div>
                 </div>
 
@@ -93,7 +93,7 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
 
               {/* Expandable Payload Viewer */}
               {isExpanded && matchingTrace && (
-                <div className="border-t border-slate-800/80 p-3.5 bg-slate-950/80 rounded-b-xl text-xs font-mono text-slate-300">
+                <div className="border-t border-slate-800/80 p-3 bg-slate-950/80 rounded-b-xl text-xs font-mono text-slate-300">
                   {matchingTrace.message && (
                     <div className="text-slate-400 mb-2 pb-2 border-b border-slate-800 flex items-start gap-1.5">
                       <span className="text-cyan-400 font-bold">INFO:</span>
@@ -164,3 +164,4 @@ export default function AgentDeliberationGraph({ agentTraces = [], activeAgent =
     </div>
   );
 }
+
