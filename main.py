@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import update
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
     InvestigationVerdict
@@ -14,7 +15,8 @@ from harness.schemas import (
 from harness.orchestrator import InvestigationOrchestrator
 from harness.ollama_client import AsyncOllamaClient
 from harness.baseline_engine import BaselineEngine
-from web_backend.database import init_db
+from web_backend.database import init_db, AsyncSessionLocal
+from web_backend.models import IncidentRecord
 from web_backend.router import router as web_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -31,6 +33,28 @@ async def lifespan(app: FastAPI):
     # Startup: initialize database tables & store singleton references
     logger.info("Initializing SQLite/PostgreSQL database tables...")
     await init_db()
+
+    # --- Ghost record cleanup ---
+    # Any incident stuck in INVESTIGATING at boot means the previous server process
+    # crashed or was killed mid-investigation. Mark them FAILED so they don't clutter
+    # the history drawer or block future investigations.
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            update(IncidentRecord)
+            .where(IncidentRecord.status == "INVESTIGATING")
+            .values(status="FAILED")
+            .returning(IncidentRecord.id)
+        )
+        zombie_ids = [row[0] for row in result.fetchall()]
+        await session.commit()
+        if zombie_ids:
+            logger.warning(
+                f"Startup cleanup: marked {len(zombie_ids)} stale INVESTIGATING "
+                f"incident(s) as FAILED: {zombie_ids}"
+            )
+        else:
+            logger.info("Startup cleanup: no stale INVESTIGATING records found.")
+
     app.state.orchestrator = orchestrator
     logger.info("ReliAI Platform ready.")
     yield

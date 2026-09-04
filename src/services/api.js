@@ -78,3 +78,18 @@ export async function fetchModelStatus() {
   return response.json();
 }
 
+export async function fetchIncidents(params = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      query.append(key, value);
+    }
+  });
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents${queryString}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch incidents: ${response.statusText}`);
+  }
+  return response.json();
+}
+

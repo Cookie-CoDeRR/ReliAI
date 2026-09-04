@@ -5,7 +5,7 @@ import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, or_
 from web_backend.models import IncidentRecord, AgentTraceRecord, ApprovalAuditRecord
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
@@ -111,6 +111,7 @@ class IncidentService:
             _active_investigations[incident_id] = curr_task
 
         final_verdict: Optional[InvestigationVerdict] = None
+        triage_domain: Optional[str] = None
 
         try:
             # Execute streaming run and record traces
@@ -124,6 +125,12 @@ class IncidentService:
                     created_at=datetime.datetime.now(datetime.timezone.utc)
                 )
                 db.add(trace)
+
+                # Capture domain from triage COMPLETED event as it streams by
+                if (event.get("agent") == "TRIAGE_AGENT"
+                        and event.get("step") == "COMPLETED"
+                        and isinstance(event.get("payload"), dict)):
+                    triage_domain = event["payload"].get("incident_domain")
 
                 if event.get("step") == "FINAL_VERDICT" and "verdict" in event:
                     final_verdict = InvestigationVerdict.model_validate(event["verdict"])
@@ -140,8 +147,13 @@ class IncidentService:
                     incident.root_cause_title = final_verdict.primary_root_cause.title
                     incident.root_cause_description = final_verdict.primary_root_cause.description
                     incident.affected_component = final_verdict.primary_root_cause.affected_component
+
+                # Persist incident domain from triage assessment (enables domain-based DB filtering)
+                if triage_domain:
+                    incident.domain = triage_domain
             else:
                 incident.status = "FAILED"
+
 
             await db.commit()
             await db.refresh(incident)
@@ -250,13 +262,31 @@ class IncidentService:
     async def list_incidents(
         db: AsyncSession,
         status: Optional[str] = None,
+        station_id: Optional[str] = None,
+        severity: Optional[str] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[IncidentRecord]:
-        """Lists incidents sorted by newest first."""
-        query = select(IncidentRecord).order_by(desc(IncidentRecord.created_at)).offset(offset).limit(limit)
+        """Lists incidents sorted by newest first with optional filtering and search."""
+        query = select(IncidentRecord).order_by(desc(IncidentRecord.created_at))
         if status:
             query = query.where(IncidentRecord.status == status)
+        if station_id:
+            query = query.where(IncidentRecord.station_id == station_id)
+        if severity:
+            query = query.where(IncidentRecord.severity == severity)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.where(
+                or_(
+                    IncidentRecord.id.ilike(search_pattern),
+                    IncidentRecord.title.ilike(search_pattern),
+                    IncidentRecord.root_cause_title.ilike(search_pattern),
+                    IncidentRecord.affected_component.ilike(search_pattern)
+                )
+            )
+        query = query.offset(offset).limit(limit)
         result = await db.execute(query)
         return list(result.scalars().all())
 

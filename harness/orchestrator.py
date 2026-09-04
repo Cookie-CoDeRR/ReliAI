@@ -20,6 +20,7 @@ from harness.agents.vision_agent import VisionAgent
 from harness.agents.root_cause_agent import RootCauseAgent
 from harness.agents.critic_agent import CriticAgent
 from harness.agents.confidence_engine import ConfidenceEngine
+from harness.guardrails import IndustrialHallucinationGuardrail
 
 
 class InvestigationOrchestrator:
@@ -27,11 +28,13 @@ class InvestigationOrchestrator:
         self,
         ollama_client: Optional[AsyncOllamaClient] = None,
         baseline_engine: Optional[BaselineEngine] = None,
-        max_concurrent: int = 2
+        max_concurrent: int = 2,
+        semaphore_timeout_sec: float = 120.0
     ):
         self.client = ollama_client or AsyncOllamaClient()
         self.baseline_engine = baseline_engine or BaselineEngine()
         self.semaphore = asyncio.Semaphore(max_concurrent)
+        self.semaphore_timeout_sec = semaphore_timeout_sec
 
         # Initialize specialized domain agents (Consolidated on Gemma + Qwen2.5-VL for vision)
         self.triage_agent = TriageAgent(self.client)
@@ -53,8 +56,19 @@ class InvestigationOrchestrator:
         Executes the step-by-step multi-agent investigation pipeline as an async generator
         for live Server-Sent Events (SSE) streaming.
         Guarded by a concurrency semaphore to prevent edge device VRAM over-allocation.
+        Raises asyncio.TimeoutError (→ 503) if no capacity slot opens within semaphore_timeout_sec.
         """
-        async with self.semaphore:
+        try:
+            await asyncio.wait_for(
+                self.semaphore.acquire(),
+                timeout=self.semaphore_timeout_sec
+            )
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"Investigation queue at capacity. All {self.semaphore._value} slots busy. "
+                "Retry after the current investigation completes."
+            )
+        try:
             start_time = time.perf_counter()
             inc_id = incident_id or f"INC-{int(start_time)}"
             station_id = snapshot.station_id
@@ -145,6 +159,14 @@ class InvestigationOrchestrator:
                 maintenance_data=maintenance_res
             )
 
+            # Apply Anti-Hallucination & Evidence Grounding Guardrail
+            hypothesis = IndustrialHallucinationGuardrail.ground_hypothesis_in_telemetry(
+                hypothesis=hypothesis,
+                snapshot=snapshot,
+                evidence_items=evidence_items,
+                triage=triage
+            )
+
             yield {
                 "incident_id": inc_id,
                 "agent": "ROOT_CAUSE_AGENT",
@@ -166,6 +188,12 @@ class InvestigationOrchestrator:
                 hypothesis=hypothesis,
                 snapshot=snapshot,
                 evidence_items=evidence_items
+            )
+
+            # Apply Anti-Hallucination Guardrail on Critic Output
+            critic_eval = IndustrialHallucinationGuardrail.filter_critic_numeric_hallucinations(
+                critic_eval=critic_eval,
+                snapshot=snapshot
             )
 
             yield {
@@ -190,12 +218,21 @@ class InvestigationOrchestrator:
                 duration_ms=round(duration_ms, 2)
             )
 
+            # Generate High-Contrast Operator Summary Card
+            verdict.operator_summary_card = IndustrialHallucinationGuardrail.build_simplified_operator_card(
+                verdict=verdict,
+                snapshot=snapshot
+            )
+
             yield {
                 "incident_id": inc_id,
                 "agent": "CONFIDENCE_ENGINE",
                 "step": "FINAL_VERDICT",
                 "verdict": verdict.model_dump()
             }
+        finally:
+            # Always release the semaphore slot, even on error or cancellation
+            self.semaphore.release()
 
     async def run_investigation(
         self,

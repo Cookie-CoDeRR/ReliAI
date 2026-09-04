@@ -1,4 +1,5 @@
 import re
+import time
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -9,6 +10,11 @@ from harness.schemas import MultimodalTelemetrySnapshot, HumanApprovalAction
 from harness.orchestrator import InvestigationOrchestrator
 
 router = APIRouter(prefix="/api/v1", tags=["Web Platform & Incidents"])
+
+# Simple in-memory rate limiter for GPU-intensive endpoints
+# Maps client IP -> last trigger timestamp
+_trigger_cooldowns: Dict[str, float] = {}
+_TRIGGER_COOLDOWN_SEC = 15.0  # Minimum seconds between scenario triggers per client
 
 _shared_orchestrator: Optional[InvestigationOrchestrator] = None
 
@@ -44,13 +50,29 @@ async def list_scenarios():
 @router.post("/scenarios/{scenario_id}/trigger")
 async def trigger_scenario(
     scenario_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
 ):
     """
     Ingests and runs a full investigation for a pre-configured industrial scenario.
     Validates scenario_id against path traversal attempts.
+    Rate-limited to 1 trigger per 15 seconds per client IP.
     """
+    # --- Rate Limit Check (skip for loopback/test clients) ---
+    client_ip = request.client.host if request.client else "unknown"
+    is_local = client_ip in ("127.0.0.1", "::1", "testclient", "localhost")
+    if not is_local:
+        now = time.monotonic()
+        last_trigger = _trigger_cooldowns.get(client_ip, 0.0)
+        if now - last_trigger < _TRIGGER_COOLDOWN_SEC:
+            remaining = round(_TRIGGER_COOLDOWN_SEC - (now - last_trigger), 1)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: please wait {remaining}s before triggering another scenario."
+            )
+        _trigger_cooldowns[client_ip] = now
+
     if not re.match(r"^[a-zA-Z0-9_\-]+$", scenario_id):
         raise HTTPException(status_code=400, detail="Invalid scenario_id format")
 
@@ -101,12 +123,23 @@ async def ingest_incident(req: IngestIncidentRequest, db: AsyncSession = Depends
 @router.get("/incidents")
 async def list_incidents(
     status: Optional[str] = Query(None, description="Filter by status (e.g. DETECTED, PENDING_APPROVAL, APPROVED)"),
+    station_id: Optional[str] = Query(None, description="Filter by station ID"),
+    severity: Optional[str] = Query(None, description="Filter by severity (e.g. CRITICAL, HIGH, MEDIUM, LOW)"),
+    search: Optional[str] = Query(None, description="Case-insensitive search matching incident ID, title, root cause, or affected component"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db)
 ):
-    """Lists incidents with optional status filtering."""
-    incidents = await IncidentService.list_incidents(db=db, status=status, limit=limit, offset=offset)
+    """Lists incidents with optional status, station_id, severity, and search filtering."""
+    incidents = await IncidentService.list_incidents(
+        db=db,
+        status=status,
+        station_id=station_id,
+        severity=severity,
+        search=search,
+        limit=limit,
+        offset=offset
+    )
     return [
         {
             "id": i.id,

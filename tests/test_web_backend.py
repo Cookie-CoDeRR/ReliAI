@@ -102,3 +102,65 @@ async def test_trigger_scenario_3_contradictory_and_override():
         )
         assert dispatch_res.status_code == 200
         assert dispatch_res.json()["action"] == "DISPATCH_TECH"
+
+
+@pytest.mark.asyncio
+async def test_incident_list_filtering_and_search():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Trigger Scenario 1 (CRITICAL severity, title "Thermal Overheat")
+        res1 = await client.post("/api/v1/scenarios/SCENARIO-01-THERMAL-OVERHEAT/trigger")
+        assert res1.status_code == 200
+        inc1_id = res1.json()["incident_id"]
+
+        # Trigger Scenario 4 (CRITICAL severity, title "Voltage Sag")
+        res2 = await client.post("/api/v1/scenarios/SCENARIO-04-VOLTAGE-SAG/trigger")
+        assert res2.status_code == 200
+        inc2_id = res2.json()["incident_id"]
+
+        # 1. Test Severity Filtering
+        crit_res = await client.get("/api/v1/incidents?severity=CRITICAL")
+        assert crit_res.status_code == 200
+        crit_list = crit_res.json()
+        assert len(crit_list) >= 2
+        assert all(item["severity"] == "CRITICAL" for item in crit_list)
+
+        # 2. Test Station ID Filtering
+        station_res = await client.get("/api/v1/incidents?station_id=STATION-TIRE-FITTER-01")
+        assert station_res.status_code == 200
+        station_list = station_res.json()
+        assert len(station_list) >= 2
+        assert all(item["station_id"] == "STATION-TIRE-FITTER-01" for item in station_list)
+
+        # 3. Test Search matching title
+        search_title_res = await client.get("/api/v1/incidents?search=Thermal")
+        assert search_title_res.status_code == 200
+        search_title_list = search_title_res.json()
+        assert any("Thermal" in item["title"] for item in search_title_list)
+
+        # 4. Test Search matching incident ID
+        search_id_res = await client.get(f"/api/v1/incidents?search={inc1_id}")
+        assert search_id_res.status_code == 200
+        search_id_list = search_id_res.json()
+        assert len(search_id_list) >= 1
+        assert any(item["id"] == inc1_id for item in search_id_list)
+
+        # 5. Test Combined Filters (status + severity + search)
+        combined_res = await client.get(f"/api/v1/incidents?severity=CRITICAL&status=PENDING_APPROVAL&search=Thermal")
+        assert combined_res.status_code == 200
+        combined_list = combined_res.json()
+        assert len(combined_list) >= 1
+        assert combined_list[0]["id"] == inc1_id
+
+        # 6. Test Pagination (limit & offset)
+        page1_res = await client.get("/api/v1/incidents?limit=1&offset=0")
+        assert page1_res.status_code == 200
+        page1_list = page1_res.json()
+        assert len(page1_list) == 1
+
+        page2_res = await client.get("/api/v1/incidents?limit=1&offset=1")
+        assert page2_res.status_code == 200
+        page2_list = page2_res.json()
+        assert len(page2_list) == 1
+        assert page1_list[0]["id"] != page2_list[0]["id"]
+
