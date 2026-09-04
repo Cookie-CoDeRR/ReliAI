@@ -179,3 +179,67 @@ async def approve_incident(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/incidents/{incident_id}/cancel")
+async def cancel_incident(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Cancels an in-flight investigation query or aborts stuck incident processing.
+    """
+    result = await IncidentService.cancel_investigation(db=db, incident_id=incident_id)
+    if result.get("status") == "NOT_FOUND":
+        raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+    return result
+
+
+class FollowUpRequest(BaseModel):
+    operator_notes: Optional[str] = None
+    telemetry_override: Optional[Dict[str, Any]] = None
+
+
+@router.post("/incidents/{incident_id}/follow-up")
+async def follow_up_investigation(
+    incident_id: str,
+    req: FollowUpRequest,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Executes a follow-up investigation on an existing incident with additional notes or sensor overrides.
+    """
+    try:
+        verdict = await IncidentService.reinvestigate_with_followup(
+            db=db,
+            incident_id=incident_id,
+            orchestrator=orchestrator,
+            operator_notes=req.operator_notes,
+            telemetry_override=req.telemetry_override
+        )
+        return {
+            "status": "FOLLOW_UP_COMPLETED",
+            "incident_id": incident_id,
+            "verdict": verdict.model_dump() if verdict else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Follow-up investigation failed: {str(e)}")
+
+
+@router.get("/system/model-status")
+async def check_models(
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Returns the fail-safe readiness status of Ollama, Gemma reasoner, and Qwen2.5-VL vision specialist.
+    """
+    text_status = await orchestrator.client.check_model_readiness()
+    vision_status = await orchestrator.client.check_model_readiness(orchestrator.client.vision_model)
+    return {
+        "text_model": text_status,
+        "vision_model": vision_status,
+        "mock_fallback_enabled": orchestrator.client.mock_fallback
+    }

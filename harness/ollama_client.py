@@ -39,6 +39,40 @@ class AsyncOllamaClient:
         except Exception:
             return False
 
+    async def check_model_readiness(self, model_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Checks whether the Ollama daemon is active and whether the specified model is installed and ready.
+        """
+        target = model_name or self.model
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as client:
+                res = await client.get(f"{self.base_url}/api/tags")
+                if res.status_code != 200:
+                    return {
+                        "available": False,
+                        "model_ready": False,
+                        "target_model": target,
+                        "installed_models": [],
+                        "error": f"Ollama returned HTTP status {res.status_code}"
+                    }
+                data = res.json()
+                models = [m.get("name") for m in data.get("models", [])]
+                model_ready = any(target in m or m.startswith(target.split(":")[0]) for m in models)
+                return {
+                    "available": True,
+                    "model_ready": model_ready,
+                    "target_model": target,
+                    "installed_models": models
+                }
+        except Exception as e:
+            return {
+                "available": False,
+                "model_ready": False,
+                "target_model": target,
+                "installed_models": [],
+                "error": str(e)
+            }
+
     async def generate_structured(
         self,
         prompt: str,
@@ -51,7 +85,7 @@ class AsyncOllamaClient:
         """
         Executes local Ollama inference and strictly validates output into the target Pydantic schema.
         Routes multimodal image tasks to the vision specialist (Qwen2.5-VL) and text reasoning to Gemma.
-        Falls back to deterministic rule synthesis if Ollama is not running in offline environments.
+        Falls back to deterministic rule synthesis if Ollama is not running in offline environments or model fails.
         """
         target_model = model_override or (self.vision_model if use_vision else self.model)
         payload: Dict[str, Any] = {
@@ -79,7 +113,7 @@ class AsyncOllamaClient:
                 parsed_json = json.loads(raw_response)
                 return schema_class.model_validate(parsed_json)
 
-        except (httpx.ConnectError, httpx.TimeoutException, ValidationError, json.JSONDecodeError) as err:
+        except (httpx.HTTPError, ValidationError, json.JSONDecodeError, Exception) as err:
             if not self.mock_fallback:
                 raise err
             logger.warning(f"Ollama inference unavailable ({err}). Executing deterministic offline rule fallback.")

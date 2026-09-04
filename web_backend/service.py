@@ -1,5 +1,6 @@
 import json
 import uuid
+import asyncio
 import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -12,6 +13,10 @@ from harness.schemas import (
     InvestigationStatus
 )
 from harness.orchestrator import InvestigationOrchestrator
+
+
+# Active investigation task registry for on-demand query cancellation
+_active_investigations: Dict[str, asyncio.Task] = {}
 
 
 class IncidentService:
@@ -45,6 +50,43 @@ class IncidentService:
         return record
 
     @staticmethod
+    async def cancel_investigation(
+        db: AsyncSession,
+        incident_id: str
+    ) -> Dict[str, Any]:
+        """
+        Cancels an in-flight investigation query and updates database state.
+        """
+        task = _active_investigations.get(incident_id)
+        task_cancelled = False
+        if task and not task.done():
+            task.cancel()
+            task_cancelled = True
+
+        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
+        incident = result.scalar_one_or_none()
+        if incident:
+            if incident.status in ("INVESTIGATING", "DETECTED"):
+                incident.status = "CANCELLED"
+                cancel_trace = AgentTraceRecord(
+                    incident_id=incident_id,
+                    agent_name="ORCHESTRATOR",
+                    step_type="CANCELLED",
+                    message="Investigation query was explicitly cancelled by operator.",
+                    payload_json={"reason": "Operator / Client Abort"},
+                    created_at=datetime.datetime.now(datetime.timezone.utc)
+                )
+                db.add(cancel_trace)
+                await db.commit()
+                await db.refresh(incident)
+            return {
+                "incident_id": incident_id,
+                "status": incident.status,
+                "task_cancelled": task_cancelled
+            }
+        return {"incident_id": incident_id, "status": "NOT_FOUND", "task_cancelled": task_cancelled}
+
+    @staticmethod
     async def investigate_incident(
         db: AsyncSession,
         incident_id: str,
@@ -53,7 +95,7 @@ class IncidentService:
         """
         Executes the autonomous AI investigation harness for an incident,
         records all intermediate agent traces, and updates the incident record.
-        Wraps execution in robust try-except to ensure incident is never left stuck in INVESTIGATING.
+        Wraps execution in robust try-except with cancellation recovery.
         """
         result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
         incident = result.scalar_one_or_none()
@@ -63,6 +105,10 @@ class IncidentService:
         snapshot = MultimodalTelemetrySnapshot.model_validate(incident.telemetry_json)
         incident.status = "INVESTIGATING"
         await db.commit()
+
+        curr_task = asyncio.current_task()
+        if curr_task:
+            _active_investigations[incident_id] = curr_task
 
         final_verdict: Optional[InvestigationVerdict] = None
 
@@ -101,21 +147,68 @@ class IncidentService:
             await db.refresh(incident)
             return final_verdict
 
-        except Exception as e:
-            # Prevent incident from being perpetually trapped in INVESTIGATING state
-            incident.status = "FAILED"
+        except (Exception, asyncio.CancelledError) as e:
+            is_cancelled = isinstance(e, asyncio.CancelledError)
+            incident.status = "CANCELLED" if is_cancelled else "FAILED"
+            msg = "Investigation query was cancelled by client/system." if is_cancelled else f"Investigation pipeline aborted due to runtime error: {str(e)}"
             fail_trace = AgentTraceRecord(
                 incident_id=incident_id,
                 agent_name="ORCHESTRATOR",
-                step_type="ERROR",
-                message=f"Investigation pipeline aborted due to runtime error: {str(e)}",
-                payload_json={"error": str(e)},
+                step_type="CANCELLED" if is_cancelled else "ERROR",
+                message=msg,
+                payload_json={"error": "Cancelled" if is_cancelled else str(e)},
                 created_at=datetime.datetime.now(datetime.timezone.utc)
             )
             db.add(fail_trace)
             await db.commit()
             await db.refresh(incident)
+            if is_cancelled:
+                raise
             raise e
+        finally:
+            _active_investigations.pop(incident_id, None)
+
+    @staticmethod
+    async def reinvestigate_with_followup(
+        db: AsyncSession,
+        incident_id: str,
+        orchestrator: InvestigationOrchestrator,
+        operator_notes: Optional[str] = None,
+        telemetry_override: Optional[Dict[str, Any]] = None
+    ) -> InvestigationVerdict:
+        """
+        Initiates a follow-up investigation on an existing incident, incorporating
+        updated operator shift notes and optional sensor readings.
+        """
+        result = await db.execute(select(IncidentRecord).where(IncidentRecord.id == incident_id))
+        incident = result.scalar_one_or_none()
+        if not incident:
+            raise ValueError(f"Incident {incident_id} not found")
+
+        current_telemetry = dict(incident.telemetry_json or {})
+        if operator_notes:
+            existing_notes = current_telemetry.get("operator_shift_notes") or ""
+            current_telemetry["operator_shift_notes"] = f"{existing_notes} [FOLLOW-UP]: {operator_notes}".strip()
+        if telemetry_override:
+            current_telemetry.update(telemetry_override)
+
+        incident.telemetry_json = current_telemetry
+        followup_trace = AgentTraceRecord(
+            incident_id=incident_id,
+            agent_name="ENGINEER",
+            step_type="FOLLOW_UP_INITIATED",
+            message=f"Follow-up investigation initiated: {operator_notes or 'Re-evaluating with updated telemetry'}",
+            payload_json={"operator_notes": operator_notes, "updates": telemetry_override},
+            created_at=datetime.datetime.now(datetime.timezone.utc)
+        )
+        db.add(followup_trace)
+        await db.commit()
+
+        return await IncidentService.investigate_incident(
+            db=db,
+            incident_id=incident_id,
+            orchestrator=orchestrator
+        )
 
     @staticmethod
     async def record_human_approval(

@@ -45,3 +45,36 @@ export async function submitHumanApproval(incidentId, { action, engineer_id, not
   }
   return response.json();
 }
+
+export async function cancelInvestigation(incidentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/cancel`, {
+    method: "POST"
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Cancellation failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
+export async function submitFollowUp(incidentId, { operator_notes, telemetry_override }) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents/${incidentId}/follow-up`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ operator_notes, telemetry_override })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Follow-up investigation failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
+export async function fetchModelStatus() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/system/model-status`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch model readiness: ${response.statusText}`);
+  }
+  return response.json();
+}
+
