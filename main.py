@@ -60,6 +60,8 @@ app.add_middleware(
 app.include_router(web_router)
 
 
+@app.get("/")
+@app.get("/health")
 @app.get("/harness/health")
 async def health_check():
     """
