@@ -105,6 +105,16 @@ class InvestigationOrchestrator:
             evidence_items = list(evidence_data["evidence_items"])
             matched_sops = evidence_data["matched_sops"]
 
+            yield {
+                "incident_id": inc_id,
+                "agent": "EVIDENCE_RAG_AGENT",
+                "step": "COMPLETED",
+                "payload": {
+                    "evidence_items": [e.model_dump() if hasattr(e, "model_dump") else e for e in evidence_items],
+                    "matched_sops": [s.model_dump() if hasattr(s, "model_dump") else s for s in matched_sops]
+                }
+            }
+
             # -------------------------------------------------------------
             # STEP 3: PARALLEL DOMAIN & MULTIMODAL VISION ANALYSIS
             # -------------------------------------------------------------

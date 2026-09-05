@@ -1,7 +1,10 @@
 import re
 import time
+import json
+import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
@@ -103,6 +106,72 @@ async def trigger_scenario(
     }
 
 
+@router.post("/scenarios/{scenario_id}/stream")
+async def stream_scenario(
+    scenario_id: str,
+    request: Request,
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Ingests and streams real-time multi-agent deliberation events for an industrial scenario via SSE.
+    Rate-limited to 1 trigger per 15 seconds per client IP.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    is_local = client_ip in ("127.0.0.1", "::1", "testclient", "localhost")
+    if not is_local:
+        now = time.monotonic()
+        last_trigger = _trigger_cooldowns.get(client_ip, 0.0)
+        if now - last_trigger < _TRIGGER_COOLDOWN_SEC:
+            remaining = round(_TRIGGER_COOLDOWN_SEC - (now - last_trigger), 1)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: please wait {remaining}s before triggering another scenario."
+            )
+        _trigger_cooldowns[client_ip] = now
+
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", scenario_id):
+        raise HTTPException(status_code=400, detail="Invalid scenario_id format")
+
+    presets = IncidentService.list_preset_scenarios()
+    target = next((s for s in presets if s["scenario_id"] == scenario_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
+
+    snapshot = MultimodalTelemetrySnapshot.model_validate(target["snapshot"])
+
+    async def event_generator():
+        from web_backend.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            try:
+                incident = await IncidentService.ingest_incident(
+                    db=session,
+                    snapshot=snapshot,
+                    title=target["title"],
+                    severity="CRITICAL" if target["expected_outcome"] == "CONCLUSIVE" else "HIGH"
+                )
+                async for event in IncidentService.stream_investigate_incident(
+                    db=session,
+                    incident_id=incident.id,
+                    orchestrator=orchestrator
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+                yield "event: complete\ndata: {}\n\n"
+            except Exception as err:
+                logging.getLogger("reliai-harness").error(f"Error in scenario SSE stream: {err}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(err)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
+
 @router.post("/incidents/ingest")
 async def ingest_incident(req: IngestIncidentRequest, db: AsyncSession = Depends(get_db)):
     """Ingests a new raw incident from IoT sensors or factory PLC."""
@@ -184,6 +253,41 @@ async def investigate_incident(
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Investigation failed: {str(e)}")
+
+
+@router.post("/incidents/{incident_id}/investigate/stream")
+async def stream_investigate_stored_incident(
+    incident_id: str,
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Streams multi-agent deliberation events for an existing stored incident via SSE.
+    """
+    async def event_generator():
+        from web_backend.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            try:
+                async for event in IncidentService.stream_investigate_incident(
+                    db=session,
+                    incident_id=incident_id,
+                    orchestrator=orchestrator
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+                yield "event: complete\ndata: {}\n\n"
+            except Exception as err:
+                logging.getLogger("reliai-harness").error(f"Error in incident SSE stream: {err}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(err)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
 
 
 @router.post("/incidents/{incident_id}/approve")
@@ -276,3 +380,28 @@ async def check_models(
         "vision_model": vision_status,
         "mock_fallback_enabled": orchestrator.client.mock_fallback
     }
+
+
+@router.get("/analytics/summary")
+async def get_analytics_summary(db: AsyncSession = Depends(get_db)):
+    """Returns aggregated executive KPI metrics across all incidents."""
+    return await IncidentService.get_analytics_summary(db)
+
+
+@router.get("/analytics/domain-breakdown")
+async def get_domain_breakdown(db: AsyncSession = Depends(get_db)):
+    """Returns incident counts and percentages grouped by failure domain."""
+    return await IncidentService.get_domain_breakdown(db)
+
+
+@router.get("/analytics/confidence-distribution")
+async def get_confidence_distribution(db: AsyncSession = Depends(get_db)):
+    """Returns binned histogram of final confidence scores."""
+    return await IncidentService.get_confidence_distribution(db)
+
+
+@router.get("/analytics/approval-breakdown")
+async def get_approval_breakdown(db: AsyncSession = Depends(get_db)):
+    """Returns human engineer sign-off audit statistics."""
+    return await IncidentService.get_approval_breakdown(db)
+
