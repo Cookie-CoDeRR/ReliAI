@@ -51,7 +51,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
   const hasConveyorFault = conveyor.belt_speed_mps < 0.35 || conveyor.belt_tension_n < 240;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl space-y-4">
+    <div className="glass-panel rounded-xl p-4 border border-slate-800 shadow-xl space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
           <Eye className="w-4 h-4 text-cyan-400" />
@@ -68,9 +68,9 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* 1. Thermal Thermography Inspector */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
+        <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
             <span className="flex items-center gap-1.5 font-semibold text-slate-300">
               <Eye className="w-3.5 h-3.5 text-rose-400" />
@@ -81,7 +81,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
             </span>
           </div>
 
-          <div className="relative h-28 rounded-lg overflow-hidden border border-slate-800 bg-gradient-to-tr from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center">
+          <div className="relative h-24 rounded-lg overflow-hidden border border-slate-800 bg-gradient-to-tr from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center">
             <div 
               className={`w-20 h-20 rounded-full blur-xl transition-all ${
                 hasThermalFault 
@@ -98,7 +98,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
         </div>
 
         {/* 2. Acoustic FFT Waveform Inspector */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
+        <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
             <span className="flex items-center gap-1.5 font-semibold text-slate-300">
               <Volume2 className="w-3.5 h-3.5 text-sky-400" />
@@ -109,14 +109,14 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
             </span>
           </div>
 
-          <div className="h-28 rounded-lg overflow-hidden border border-slate-800 bg-slate-950 p-2 flex items-center justify-center">
+          <div className="h-24 rounded-lg overflow-hidden border border-slate-800 bg-slate-950 p-2 flex items-center justify-center">
             <canvas ref={canvasRef} width={220} height={90} className="w-full h-full" />
           </div>
           <p className="text-[10px] text-slate-500 font-mono mt-2">Sampling: 48 kHz • Band: 0 - 24 kHz</p>
         </div>
 
         {/* 3. Electrical & Pneumatic Power Grid */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
+        <div className="bg-slate-900/90 rounded-lg p-3 border border-slate-800 flex flex-col justify-between">
           <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
             <span className="flex items-center gap-1.5 font-semibold text-slate-300">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
@@ -127,7 +127,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
             </span>
           </div>
 
-          <div className="h-28 rounded-lg border border-slate-800 bg-slate-950 p-3 grid grid-cols-3 gap-2 text-center font-mono">
+          <div className="h-24 rounded-lg border border-slate-800 bg-slate-950 p-3 grid grid-cols-3 gap-2 text-center font-mono">
             <div className="flex flex-col justify-center bg-slate-900/80 rounded p-1">
               <span className="text-[9px] text-slate-400">VOLTAGE</span>
               <span className={`text-xs font-bold ${voltage < 380 ? 'text-rose-400' : 'text-cyan-300'}`}>{voltage.toFixed(0)}V</span>
@@ -151,9 +151,9 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
       </div>
 
       {/* Michelin Conveyor Belt & Bead Lubrication Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {/* Conveyor Line Telemetry */}
-        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
+        <div className="bg-slate-900/70 rounded-lg p-2.5 border border-slate-800 flex items-center justify-between font-mono text-xs">
           <div className="flex items-center gap-2">
             <Disc className={`w-4 h-4 ${hasConveyorFault ? 'text-rose-400 animate-spin' : 'text-cyan-400'}`} />
             <div>
@@ -171,7 +171,7 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
         </div>
 
         {/* Bead Lubrication System */}
-        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
+        <div className="bg-slate-900/70 rounded-lg p-2.5 border border-slate-800 flex items-center justify-between font-mono text-xs">
           <div className="flex items-center gap-2">
             <Wind className={`w-4 h-4 ${hasLubeFault ? 'text-rose-400 animate-pulse' : 'text-teal-400'}`} />
             <div>
