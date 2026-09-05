@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
+import CommandSidebar from './components/CommandSidebar';
+import CommandTopbar from './components/CommandTopbar';
+import MissionDecisionPanel from './components/MissionDecisionPanel';
 import IncidentSummary from './components/IncidentSummary';
+import DiagnosisPanel from './components/DiagnosisPanel';
 import RobotViewer from './components/RobotViewer';
 import ScenarioSelector from './components/ScenarioSelector';
 import AgentDeliberationGraph from './components/AgentDeliberationGraph';
@@ -237,90 +241,52 @@ export default function App() {
   const hasAcousticFault = activeScenarioId?.includes("THERMAL") || activeScenarioId?.includes("PNEUMATIC");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30">
-      {/* Header Bar */}
-      <Header
-        status={status}
+    <div className="min-h-screen text-slate-100 selection:bg-cyan-500/30">
+      <CommandSidebar
+        activeScenarioId={activeScenarioId}
+        onSelectScenario={handleTriggerScenario}
         isInvestigating={isInvestigating}
-        onReset={() => handleTriggerScenario(activeScenarioId)}
-        onOpenHistory={() => setIsHistoryOpen(true)}
         onOpenAnalytics={() => setIsAnalyticsOpen(true)}
+        onOpenHistory={() => setIsHistoryOpen(true)}
       />
 
-      {/* Main Command Center Layout */}
-      <main className="grow p-4 md:p-5 space-y-4 max-w-[1650px] w-full mx-auto">
-        <IncidentSummary
+      <div className="lg:pl-[230px] min-h-screen">
+        <CommandTopbar
           scenarioId={activeScenarioId}
           incidentId={currentIncidentId}
           status={status}
-          verdict={verdict}
           isInvestigating={isInvestigating}
+          activeAgent={activeAgent}
+          onReset={() => handleTriggerScenario(activeScenarioId)}
         />
 
-        {/* Scenario Benchmark Bar */}
-        <ScenarioSelector
-          activeScenarioId={activeScenarioId}
-          onSelectScenario={handleTriggerScenario}
-          isInvestigating={isInvestigating}
-        />
+        <main className="px-3 py-4 md:px-5 md:py-5 max-w-[1900px] mx-auto space-y-4">
+          <section id="command" className="scroll-mt-20">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.62fr)_minmax(360px,.78fr)] gap-4 items-stretch">
+              <div className="min-w-0">
+                <RobotViewer activeFaultJoint={activeFaultJoint} jointsData={telemetry.joints || {}} isLevitating={isInvestigating} />
+              </div>
+              <MissionDecisionPanel status={status} verdict={verdict} isInvestigating={isInvestigating} activeAgent={activeAgent} agentTraces={agentTraces} />
+            </div>
+          </section>
 
-        {/* Primary Workspace: 3D Twin (Left) + Multi-Agent Reasoning Graph (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: 3D Robotic Arm Twin & Multimodal Inspector */}
-          <div className="lg:col-span-7 space-y-5 flex flex-col">
-            <RobotViewer
-              activeFaultJoint={activeFaultJoint}
-              jointsData={telemetry.joints || {}}
-              isLevitating={isInvestigating}
-            />
+          <section id="investigation" className="scroll-mt-20">
+            <AgentDeliberationGraph agentTraces={agentTraces} activeAgent={activeAgent} isInvestigating={isInvestigating} />
+          </section>
 
-            <MultimodalInspector
-              telemetry={telemetry}
-              hasThermalFault={hasThermalFault}
-              hasAcousticFault={hasAcousticFault}
-            />
-          </div>
+          <section id="evidence" className="scroll-mt-20 grid grid-cols-1 2xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,.75fr)] gap-4 items-stretch">
+            <div className="min-w-0"><MultimodalInspector telemetry={telemetry} hasThermalFault={hasThermalFault} hasAcousticFault={hasAcousticFault} /></div>
+            <CriticDebateView rootCause={verdict?.primary_root_cause} criticReport={verdict?.critic_report} isInvestigating={isInvestigating} />
+          </section>
 
-          {/* Right Column: Multi-Agent Deliberation Graph */}
-          <div className="lg:col-span-5 flex flex-col">
-            <AgentDeliberationGraph
-              agentTraces={agentTraces}
-              activeAgent={activeAgent}
-              isInvestigating={isInvestigating}
-            />
+          <section id="human-gate" className="scroll-mt-20">
+            <HumanApprovalBar status={status} confidenceScore={verdict?.final_confidence_score ?? 0} recommendedMitigation={verdict?.recommended_mitigation} onAction={handleHumanAction} isProcessing={isInvestigating} />
+          </section>
+        </main>
+      </div>
 
-          </div>
-        </div>
-
-        {/* Secondary Row: Adversarial Debate Breakdown */}
-        <CriticDebateView
-          rootCause={verdict?.primary_root_cause}
-          criticReport={verdict?.critic_report}
-          isInvestigating={isInvestigating}
-        />
-
-        {/* Bottom Sticky Action Gateway: Human-in-the-Loop Sign-off */}
-        <HumanApprovalBar
-          status={status}
-          confidenceScore={verdict?.final_confidence_score ?? 0}
-          recommendedMitigation={verdict?.recommended_mitigation}
-          onAction={handleHumanAction}
-          isProcessing={isInvestigating}
-        />
-      </main>
-
-      {/* Slide-over Investigation History Drawer */}
-      <IncidentHistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        onSelectIncident={handleSelectIncident}
-      />
-
-      {/* Fleet Analytics & Metric Overview Modal */}
-      <AnalyticsDashboard
-        isOpen={isAnalyticsOpen}
-        onClose={() => setIsAnalyticsOpen(false)}
-      />
+      <IncidentHistoryDrawer isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onSelectIncident={handleSelectIncident} />
+      <AnalyticsDashboard isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
     </div>
   );
 }
