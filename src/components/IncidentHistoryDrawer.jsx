@@ -37,7 +37,7 @@ export default function IncidentHistoryDrawer({ isOpen, onClose, onSelectInciden
         search: searchTerm || undefined,
         limit: 30
       });
-      setIncidents(data.incidents || []);
+      setIncidents(data.incidents || (Array.isArray(data) ? data : []));
     } catch (err) {
       console.error("Failed to fetch incident history:", err);
       setError("Unable to load incident history from database.");
@@ -200,7 +200,7 @@ export default function IncidentHistoryDrawer({ isOpen, onClose, onSelectInciden
               <select
                 value={severityFilter}
                 onChange={(e) => setSeverityFilter(e.target.value)}
-                className="w-full bg-white border border-slate-200 px-2 py-1 rounded-[8px] text-xs font-mono text-slate-700 focus:outline-none focus:border-[#d98555]"
+                className="w-full bg-[#faeee5] border border-slate-200 px-2 py-1 rounded-[8px] text-xs font-mono text-slate-700 focus:outline-none focus:border-[#d98555]"
               >
                 <option value="">All Severities</option>
                 <option value="CRITICAL">Critical</option>

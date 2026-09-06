@@ -41,15 +41,21 @@ export default function Header({ status, isInvestigating, onReset, onOpenHistory
             <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
             <span className={`text-[9px] font-mono font-semibold ${meta.text}`}>{meta.label}</span>
           </div>
-          <button onClick={onOpenAnalytics} className="h-8 px-2.5 rounded-lg border border-indigo-500/25 bg-indigo-500/[0.06] text-indigo-300 hover:text-white hover:border-indigo-400/50 transition flex items-center gap-1.5 text-[10px] font-mono">
-            <BarChart3 className="w-3.5 h-3.5" /><span className="hidden md:inline">Analytics</span>
-          </button>
-          <button onClick={onOpenHistory} className="h-8 px-2.5 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] text-cyan-300 hover:text-white hover:border-cyan-400/50 transition flex items-center gap-1.5 text-[10px] font-mono">
-            <Clock className="w-3.5 h-3.5" /><span className="hidden md:inline">History</span>
-          </button>
-          <button onClick={onReset} className="h-8 w-8 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 hover:text-white hover:border-slate-600 transition flex items-center justify-center" title="Reset active incident">
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
+          {onOpenAnalytics && (
+            <button onClick={onOpenAnalytics} className="h-8 px-2.5 rounded-lg border border-indigo-500/25 bg-indigo-500/[0.06] text-indigo-300 hover:text-white hover:border-indigo-400/50 transition flex items-center gap-1.5 text-[10px] font-mono">
+              <BarChart3 className="w-3.5 h-3.5" /><span className="hidden md:inline">Analytics</span>
+            </button>
+          )}
+          {onOpenHistory && (
+            <button onClick={onOpenHistory} className="h-8 px-2.5 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.04] text-cyan-300 hover:text-white hover:border-cyan-400/50 transition flex items-center gap-1.5 text-[10px] font-mono">
+              <Clock className="w-3.5 h-3.5" /><span className="hidden md:inline">History</span>
+            </button>
+          )}
+          {onReset && (
+            <button onClick={onReset} className="h-8 w-8 rounded-lg border border-slate-800 bg-slate-900/70 text-slate-400 hover:text-white hover:border-slate-600 transition flex items-center justify-center" title="Reset active incident">
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </header>

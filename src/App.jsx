@@ -16,6 +16,9 @@ import ToolboxExplorerView from './components/ToolboxExplorerView';
 import AuthModal from './components/AuthModal';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
+import AccountControlPanel from './components/AccountControlPanel';
+import ProfileModal from './components/ProfileModal';
+import SettingsModal from './components/SettingsModal';
 import { MACHINERY_PROJECTS } from './data/machineryProjects';
 import { subscribeToAuthChanges, logoutUser } from './services/firebase';
 import {
@@ -59,7 +62,9 @@ import {
   Filter,
   ArrowUpDown,
   BookOpen,
-  Radio
+  Radio,
+  User,
+  Settings
 } from 'lucide-react';
 
 const SEARCH_DATABASE = [
@@ -261,6 +266,8 @@ export default function App() {
   };
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [modelOnline, setModelOnline] = useState(true);
   const [isPromptDropdownOpen, setIsPromptDropdownOpen] = useState(false);
   const [attachedLandingDoc, setAttachedLandingDoc] = useState(null);
@@ -1117,6 +1124,22 @@ export default function App() {
                   </div>
 
                   <button
+                    onClick={() => { setIsProfileOpen(true); setIsMoreOptionsOpen(false); }}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <User className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>Operator Profile</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setIsSettingsOpen(true); setIsMoreOptionsOpen(false); }}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>System Settings</span>
+                  </button>
+
+                  <button
                     onClick={() => { setIsAnalyticsOpen(true); setIsMoreOptionsOpen(false); }}
                     className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
                   >
@@ -1214,7 +1237,7 @@ export default function App() {
         <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch overflow-hidden pt-1 sm:pt-1.5">
           
           {/* LEFT SIDEBAR: Clean white card */}
-          <aside className="w-[165px] sm:w-[185px] md:w-[200px] h-full bg-white/95 backdrop-blur-md rounded-[12px] p-4 sm:p-5 shadow-xs border border-white/80 flex flex-col justify-start shrink-0">
+          <aside className="w-[165px] sm:w-[185px] md:w-[200px] h-full bg-white/95 backdrop-blur-md rounded-[12px] p-4 sm:p-5 shadow-xs border border-white/80 flex flex-col justify-between overflow-y-auto shrink-0">
             <div className="flex flex-col space-y-3 sm:space-y-4 text-left">
               <button
                 onClick={() => setActiveTab("Dashboard")}
@@ -1292,6 +1315,15 @@ export default function App() {
               >
                 Connected<br />Machinery
               </button>
+            </div>
+
+            {/* Bottom Account Control Section */}
+            <div className="shrink-0 pt-3 mt-4 border-t border-slate-200/80">
+              <AccountControlPanel
+                user={user}
+                onOpenProfile={() => setIsProfileOpen(true)}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+              />
             </div>
           </aside>
 
@@ -1824,6 +1856,19 @@ export default function App() {
         onAuthSuccess={(authenticatedUser) => {
           setUser(authenticatedUser);
         }}
+      />
+
+      {/* Operator Profile Modal */}
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        user={user}
+      />
+
+      {/* System Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
