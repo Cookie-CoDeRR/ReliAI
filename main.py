@@ -108,6 +108,25 @@ async def health_check():
     }
 
 
+@app.get("/harness/gpu")
+async def get_harness_gpu():
+    """
+    Diagnostic endpoint returning live Apple Silicon Metal GPU metrics,
+    Ollama VRAM residency, and inference throughput.
+    """
+    from harness.gpu_monitor import get_apple_gpu_hardware_stats, get_ollama_gpu_vram_stats
+    hw_stats = get_apple_gpu_hardware_stats()
+    vram_stats = await get_ollama_gpu_vram_stats(ollama_client.base_url)
+    throughput = ollama_client.get_throughput_metrics()
+    return {
+        "hardware": hw_stats,
+        "ollama_vram": vram_stats,
+        "token_throughput": throughput,
+        "gpu_accelerated": vram_stats.get("running", False) and len(vram_stats.get("models", [])) > 0
+    }
+
+
+
 @app.get("/harness/baselines")
 async def get_golden_baselines():
     """

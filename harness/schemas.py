@@ -254,9 +254,10 @@ class RootCauseHypothesis(BaseModel):
     title: str = Field(description="Concise technical name of failure mode")
     description: str = Field(description="Physical and mechanical causal explanation")
     affected_component: str = Field(description="Specific assembly (e.g. Joint 3 Harmonic Drive)")
-    causal_chain: List[str] = Field(description="Step-by-step physical failure progression")
-    cited_evidence_ids: List[str] = Field(description="Evidence IDs strictly proving this hypothesis")
-    preliminary_confidence: float = Field(description="Initial confidence score 0.0 to 100.0")
+    causal_chain: List[str] = Field(default_factory=list, description="Step-by-step physical failure progression")
+    cited_evidence_ids: List[str] = Field(default_factory=list, description="Evidence IDs strictly proving this hypothesis")
+    preliminary_confidence: float = Field(default=85.0, description="Initial confidence score 0.0 to 100.0")
+
 
     @field_validator("affected_component", mode="before")
     @classmethod
@@ -294,10 +295,23 @@ class RootCauseHypothesis(BaseModel):
     @field_validator("preliminary_confidence", mode="before")
     @classmethod
     def normalize_confidence(cls, v: Any) -> float:
+        if isinstance(v, str):
+            val_upper = v.upper().strip()
+            if "CRIT" in val_upper or "HIGH" in val_upper:
+                return 90.0
+            if "MED" in val_upper:
+                return 75.0
+            if "LOW" in val_upper:
+                return 60.0
         try:
-            return float(v)
+            val = float(v)
+            if 0.0 < val <= 1.0:
+                val = val * 100.0
+            return val
         except Exception:
             return 85.0
+
+
 
 
 class CriticEvaluation(BaseModel):

@@ -405,3 +405,28 @@ async def get_approval_breakdown(db: AsyncSession = Depends(get_db)):
     """Returns human engineer sign-off audit statistics."""
     return await IncidentService.get_approval_breakdown(db)
 
+
+@router.get("/system/gpu")
+async def get_gpu_diagnostics(
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Returns real-time GPU hardware acceleration diagnostics, Apple Silicon Metal metrics,
+    VRAM residency, and token throughput.
+    """
+    from harness.gpu_monitor import get_apple_gpu_hardware_stats, get_ollama_gpu_vram_stats
+    hw_stats = get_apple_gpu_hardware_stats()
+    vram_stats = await get_ollama_gpu_vram_stats(orchestrator.client.base_url)
+    throughput = orchestrator.client.get_throughput_metrics()
+    is_accelerated = (
+        hw_stats.get("device_utilization_pct", 0) > 0 or
+        (vram_stats.get("running", False) and len(vram_stats.get("models", [])) > 0)
+    )
+    return {
+        "hardware": hw_stats,
+        "ollama_vram": vram_stats,
+        "token_throughput": throughput,
+        "gpu_accelerated": is_accelerated
+    }
+
+

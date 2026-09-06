@@ -92,7 +92,8 @@ async def test_investigation_query_cancellation():
 @pytest.mark.asyncio
 async def test_follow_up_reinvestigation():
     """Verify follow-up investigation updates notes, records trace, and produces verdict."""
-    orchestrator = InvestigationOrchestrator()
+    mock_client = AsyncOllamaClient(base_url="http://127.0.0.1:9999", mock_fallback=True)
+    orchestrator = InvestigationOrchestrator(ollama_client=mock_client)
     async with AsyncSessionLocal() as session:
         snapshot = MultimodalTelemetrySnapshot(
             station_id="STATION-FOLLOWUP-TEST",
