@@ -17,8 +17,7 @@ import AuthModal from './components/AuthModal';
 import LandingPage from './components/LandingPage';
 import AuthPage from './components/AuthPage';
 import AccountControlPanel from './components/AccountControlPanel';
-import ProfileModal from './components/ProfileModal';
-import SettingsModal from './components/SettingsModal';
+import SettingsPage from './components/SettingsPage';
 import { MACHINERY_PROJECTS } from './data/machineryProjects';
 import { subscribeToAuthChanges, logoutUser } from './services/firebase';
 import {
@@ -266,8 +265,6 @@ export default function App() {
   };
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
-  const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [modelOnline, setModelOnline] = useState(true);
   const [isPromptDropdownOpen, setIsPromptDropdownOpen] = useState(false);
   const [attachedLandingDoc, setAttachedLandingDoc] = useState(null);
@@ -1124,7 +1121,7 @@ export default function App() {
                   </div>
 
                   <button
-                    onClick={() => { setIsProfileOpen(true); setIsMoreOptionsOpen(false); }}
+                    onClick={() => { setActiveTab("Settings"); setIsMoreOptionsOpen(false); }}
                     className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
                   >
                     <User className="w-3.5 h-3.5 text-[#d98555]" />
@@ -1132,7 +1129,7 @@ export default function App() {
                   </button>
 
                   <button
-                    onClick={() => { setIsSettingsOpen(true); setIsMoreOptionsOpen(false); }}
+                    onClick={() => { setActiveTab("Settings"); setIsMoreOptionsOpen(false); }}
                     className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
                   >
                     <Settings className="w-3.5 h-3.5 text-[#d98555]" />
@@ -1205,16 +1202,20 @@ export default function App() {
 
             {/* Firebase Auth User Pill / Sign In Trigger */}
             {user ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-white/90 backdrop-blur-md rounded-[8px] border border-white/90 text-slate-800 shadow-2xs">
+              <div
+                onClick={() => setActiveTab("Settings")}
+                className="flex items-center gap-1.5 px-2 py-1 bg-white/90 backdrop-blur-md hover:bg-white rounded-[8px] border border-white/90 text-slate-800 shadow-2xs cursor-pointer group transition"
+                title="View Profile & Settings"
+              >
                 <div className="w-4 h-4 rounded-full bg-[#d98555] text-white flex items-center justify-center text-[9px] font-bold">
                   {(user.displayName || user.email || "U")[0].toUpperCase()}
                 </div>
-                <span className="max-w-[85px] truncate font-semibold">
+                <span className="max-w-[85px] truncate font-semibold group-hover:text-[#c8764b] transition">
                   {user.displayName?.split(" ")[0] || user.email?.split("@")[0] || "Operator"}
                 </span>
                 <button
                   type="button"
-                  onClick={async () => { await logoutUser(); setUser(null); }}
+                  onClick={async (e) => { e.stopPropagation(); await logoutUser(); setUser(null); }}
                   title="Sign Out"
                   className="text-slate-400 hover:text-rose-600 ml-1 transition cursor-pointer text-[10px]"
                 >
@@ -1321,14 +1322,26 @@ export default function App() {
             <div className="shrink-0 pt-3 mt-4 border-t border-slate-200/80">
               <AccountControlPanel
                 user={user}
-                onOpenProfile={() => setIsProfileOpen(true)}
-                onOpenSettings={() => setIsSettingsOpen(true)}
+                activeTab={activeTab}
+                onOpenProfile={() => setActiveTab("Settings")}
+                onOpenSettings={() => setActiveTab("Settings")}
               />
             </div>
           </aside>
 
           {/* MAIN STAGE */}
-          {isDashboardTab ? (
+          {activeTab === "Settings" ? (
+            /* ============================================================ */
+            /* TAB: SETTINGS & OPERATOR PROFILE (Center-Aligned Page)       */
+            /* ============================================================ */
+            <main className="flex-1 min-w-0 h-full bg-white/95 backdrop-blur-md rounded-[12px] border border-white/80 shadow-xs flex flex-col overflow-hidden">
+              <SettingsPage
+                user={user}
+                onBack={() => setActiveTab("Dashboard")}
+                onSignOutSuccess={() => setUser(null)}
+              />
+            </main>
+          ) : isDashboardTab ? (
             /* ============================================================ */
             /* TAB 1: MAIN LANDING DASHBOARD (Clean, Spacious, No 3D Box)  */
             /* ============================================================ */
@@ -1856,19 +1869,6 @@ export default function App() {
         onAuthSuccess={(authenticatedUser) => {
           setUser(authenticatedUser);
         }}
-      />
-
-      {/* Operator Profile Modal */}
-      <ProfileModal
-        isOpen={isProfileOpen}
-        onClose={() => setIsProfileOpen(false)}
-        user={user}
-      />
-
-      {/* System Settings Modal */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );

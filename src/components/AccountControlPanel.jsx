@@ -11,10 +11,13 @@ export default function AccountControlPanel({
   user,
   onOpenProfile,
   onOpenSettings,
+  activeTab,
   sector = "Automotive Manufacturing",
   connectedMachinesCount = 12,
   technicalLeads = ["Alex Morgan", "Priya Sharma"]
 }) {
+  const isSettingsActive = activeTab === "Settings";
+
   return (
     <div className="w-full flex flex-col select-none text-slate-800 space-y-3">
       {/* ============================================================ */}
@@ -70,35 +73,43 @@ export default function AccountControlPanel({
       </div>
 
       {/* ============================================================ */}
-      {/* 2. ACTIONABLE ACCOUNT OPTIONS (EXACTLY TWO BUTTONS)           */}
+      {/* 2. ACTIONABLE ACCOUNT OPTIONS (CENTER-ALIGNED PAGE ROUTING)   */}
       {/* ============================================================ */}
       <div className="pt-2 border-t border-slate-200/80 space-y-1">
         {/* PROFILE ACTION BUTTON */}
         <button
           type="button"
           onClick={onOpenProfile}
-          className="w-full text-left text-[12.5px] sm:text-[13.5px] font-mono font-medium text-slate-700 hover:text-[#c8764b] hover:bg-[#faeee5]/80 rounded-lg px-2 py-1.5 transition cursor-pointer flex items-center justify-between group focus:outline-none focus:ring-1 focus:ring-[#d98555]/30"
-          title="Open User Profile"
+          className={`w-full text-left text-[12.5px] sm:text-[13.5px] font-mono transition cursor-pointer flex items-center justify-between group rounded-lg px-2 py-1.5 ${
+            isSettingsActive
+              ? "bg-[#faeee5] text-[#c8764b] font-semibold"
+              : "text-slate-700 hover:text-[#c8764b] hover:bg-[#faeee5]/80 font-medium"
+          }`}
+          title="Open Profile & Settings Page"
         >
           <div className="flex items-center gap-2 min-w-0">
             <User className="w-3.5 h-3.5 text-[#d98555] group-hover:scale-110 transition shrink-0" />
             <span className="truncate">Profile</span>
           </div>
-          <ChevronRight className="w-3 h-3 text-slate-400 group-hover:text-[#c8764b] group-hover:translate-x-0.5 transition shrink-0" />
+          <ChevronRight className={`w-3 h-3 transition shrink-0 ${isSettingsActive ? "text-[#c8764b] translate-x-0.5" : "text-slate-400 group-hover:text-[#c8764b] group-hover:translate-x-0.5"}`} />
         </button>
 
         {/* SETTINGS ACTION BUTTON */}
         <button
           type="button"
           onClick={onOpenSettings}
-          className="w-full text-left text-[12.5px] sm:text-[13.5px] font-mono font-medium text-slate-700 hover:text-[#c8764b] hover:bg-[#faeee5]/80 rounded-lg px-2 py-1.5 transition cursor-pointer flex items-center justify-between group focus:outline-none focus:ring-1 focus:ring-[#d98555]/30"
-          title="Open Application Settings"
+          className={`w-full text-left text-[12.5px] sm:text-[13.5px] font-mono transition cursor-pointer flex items-center justify-between group rounded-lg px-2 py-1.5 ${
+            isSettingsActive
+              ? "bg-[#faeee5] text-[#c8764b] font-semibold"
+              : "text-slate-700 hover:text-[#c8764b] hover:bg-[#faeee5]/80 font-medium"
+          }`}
+          title="Open Application Settings Page"
         >
           <div className="flex items-center gap-2 min-w-0">
-            <Settings className="w-3.5 h-3.5 text-slate-500 group-hover:text-[#c8764b] group-hover:rotate-45 transition shrink-0" />
+            <Settings className={`w-3.5 h-3.5 shrink-0 transition ${isSettingsActive ? "text-[#c8764b]" : "text-slate-500 group-hover:text-[#c8764b] group-hover:rotate-45"}`} />
             <span className="truncate">Settings</span>
           </div>
-          <ChevronRight className="w-3 h-3 text-slate-400 group-hover:text-[#c8764b] group-hover:translate-x-0.5 transition shrink-0" />
+          <ChevronRight className={`w-3 h-3 transition shrink-0 ${isSettingsActive ? "text-[#c8764b] translate-x-0.5" : "text-slate-400 group-hover:text-[#c8764b] group-hover:translate-x-0.5"}`} />
         </button>
       </div>
     </div>
