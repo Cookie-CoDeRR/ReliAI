@@ -1,149 +1,21 @@
-import React, { useState } from 'react';
-import { CheckCircle, XCircle, Wrench, Shield, UserCheck, AlertOctagon } from 'lucide-react';
+import React, { useState } from "react";
+import { CheckCircle, XCircle, Wrench, UserCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 
-export default function HumanApprovalBar({ 
-  status, 
-  confidenceScore = 0, 
-  recommendedMitigation = "", 
-  onAction,
-  isProcessing = false 
-}) {
+export default function HumanApprovalBar({ status, confidenceScore = 0, recommendedMitigation = "", onAction, isProcessing = false }) {
   const [engineerId, setEngineerId] = useState("ENG-STATION-LEAD-01");
   const [notes, setNotes] = useState("");
-  const isApproved = status === "APPROVED";
-  const isContradictory = status === "INCONCLUSIVE_CONTRADICTIONS";
-
-  const handleAction = (actionType) => {
-    onAction({
-      action: actionType,
-      engineer_id: engineerId,
-      notes: notes || `Action ${actionType} triggered from Command Center.`
-    });
-  };
+  const approved = status === "APPROVED";
+  const contradictory = status === "INCONCLUSIVE_CONTRADICTIONS";
+  const act = (action) => onAction({ action, engineer_id: engineerId, notes: notes || `Action ${action} triggered from ReliAI Investigation OS.` });
 
   return (
-    <div className={`glass-panel rounded-2xl p-5 border transition-all ${
-      isContradictory 
-        ? 'border-rose-500/60 bg-slate-950/90 shadow-2xl shadow-rose-950/30' 
-        : isApproved 
-          ? 'border-emerald-500/60 bg-slate-950/90 shadow-2xl shadow-emerald-950/30' 
-          : 'border-cyan-500/40 bg-slate-950/90'
-    }`}>
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        {/* Title & Safeguard Badge */}
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-700">
-            <UserCheck className="w-5 h-5 text-cyan-400" />
-          </div>
-          <div>
-            <h3 className="font-heading font-bold text-base text-white">
-              Human-in-the-Loop Safety Authorization Gateway
-            </h3>
-            <p className="text-xs text-slate-400 font-mono">
-              Deterministic Gate: No automated maintenance or PLC override is dispatched without verified engineer sign-off.
-            </p>
-          </div>
-        </div>
-
-        {/* Confidence Score Pill */}
-        <div className="flex items-center gap-3 bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-800">
-          <div className="text-right">
-            <div className="text-[10px] font-mono text-slate-400 uppercase">Verified Confidence</div>
-            {isProcessing && (!confidenceScore || confidenceScore === 0) ? (
-              <div className="h-6 w-16 bg-slate-800 rounded animate-pulse my-0.5" />
-            ) : (
-              <div className={`font-mono text-xl font-extrabold ${
-                confidenceScore >= 80 ? 'text-emerald-400' : confidenceScore <= 45 ? 'text-rose-400' : 'text-amber-400'
-              }`}>
-                {confidenceScore.toFixed(1)}%
-              </div>
-            )}
-          </div>
-          <div className="w-10 h-10 rounded-full border-2 border-slate-800 flex items-center justify-center font-mono text-xs">
-            {isProcessing ? <span className="w-3 h-3 rounded-full bg-indigo-400 animate-ping" /> : confidenceScore >= 80 ? '✓' : '!'}
-          </div>
-        </div>
+    <section className={`os-panel rounded-2xl overflow-hidden ${contradictory ? "border-rose-500/30" : approved ? "border-emerald-500/30" : ""}`}>
+      <div className="px-4 py-3.5 flex flex-col xl:flex-row xl:items-center gap-3">
+        <div className="xl:w-[300px] flex items-center gap-3"><div className="w-10 h-10 rounded-xl border border-cyan-500/20 bg-cyan-500/[0.05] flex items-center justify-center"><UserCheck className="w-4.5 h-4.5 text-cyan-300" /></div><div><div className="flex items-center gap-2"><div className="font-heading text-[14px] font-bold text-white">Human Decision Gate</div><LockKeyhole className="w-3 h-3 text-slate-600" /></div><div className="mt-0.5 text-[8px] font-mono text-slate-600">No PLC or maintenance action without engineer authorization.</div></div></div>
+        <div className="flex-1 grid grid-cols-1 md:grid-cols-[190px_1fr] gap-2"><input value={engineerId} onChange={(e) => setEngineerId(e.target.value)} className="h-9 rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-[9px] font-mono text-slate-200 outline-none focus:border-cyan-500/40" /><input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Authorization notes / shift log..." className="h-9 rounded-lg border border-slate-800 bg-slate-950/60 px-3 text-[9px] font-mono text-slate-200 outline-none focus:border-cyan-500/40" /></div>
+        <div className="flex items-center gap-2"><div className="hidden md:block pr-1 text-right"><div className="text-[7px] font-mono uppercase tracking-wider text-slate-600">Verified Confidence</div><div className={`mt-0.5 text-[16px] font-mono font-bold ${confidenceScore >= 80 ? "text-emerald-400" : confidenceScore <= 45 ? "text-rose-400" : "text-amber-400"}`}>{Number(confidenceScore || 0).toFixed(1)}%</div></div>{contradictory ? <button onClick={() => act("DISPATCH_TECH")} disabled={isProcessing} className="h-9 px-4 rounded-lg border border-rose-500/25 bg-rose-500/[0.08] text-rose-200 hover:bg-rose-500/[0.13] transition flex items-center gap-2 text-[9px] font-semibold"><Wrench className="w-3.5 h-3.5" />Dispatch Tech</button> : <><button onClick={() => act("OVERRIDE")} disabled={isProcessing} className="h-9 px-3 rounded-lg border border-slate-700 bg-slate-950/55 text-slate-400 hover:text-white hover:border-amber-500/30 transition flex items-center gap-2 text-[9px] font-semibold"><XCircle className="w-3.5 h-3.5 text-amber-400" />Override</button><button onClick={() => act("APPROVE")} disabled={isProcessing || approved} className={`h-9 px-4 rounded-lg transition flex items-center gap-2 text-[9px] font-bold ${approved ? "border border-emerald-500/20 bg-emerald-500/[0.05] text-emerald-400/65" : "bg-emerald-400 text-emerald-950 hover:bg-emerald-300"}`}>{approved ? <ShieldCheck className="w-3.5 h-3.5" /> : <CheckCircle className="w-3.5 h-3.5" />}{approved ? "Approved" : "Approve Mitigation"}</button></>}</div>
       </div>
-
-      {/* In-Flight Processing Banner */}
-      {isProcessing && (
-        <div className="mb-4 py-2 px-3.5 rounded-xl bg-indigo-950/40 border border-indigo-500/40 text-xs font-mono text-indigo-300 flex items-center justify-between animate-pulse">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
-            <span>AI Investigation & Adversarial Critic Audit in Progress...</span>
-          </div>
-          <span className="text-[11px] text-indigo-400/80 font-semibold">GATE LOCKED PENDING VERDICT</span>
-        </div>
-      )}
-
-      {/* Recommended Mitigation Display */}
-      {recommendedMitigation && (
-        <div className="mb-4 bg-slate-900/80 rounded-xl p-3.5 border border-slate-800 text-xs font-mono text-slate-200">
-          <div className="text-slate-400 font-bold mb-1 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5 text-cyan-400" />
-            Recommended Corrective Action (SOP Grounded):
-          </div>
-          <div className="text-cyan-200">{recommendedMitigation}</div>
-        </div>
-      )}
-
-      {/* Inputs & Action Buttons */}
-      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-800">
-        <div className="flex flex-wrap items-center gap-2 grow">
-          <input
-            type="text"
-            value={engineerId}
-            onChange={(e) => setEngineerId(e.target.value)}
-            placeholder="Engineer ID (e.g. ENG-01)"
-            className="bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 w-48"
-          />
-          <input
-            type="text"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Authorization audit notes / shift log..."
-            className="bg-slate-900 border border-slate-700 px-3 py-2 rounded-lg text-xs font-mono text-white placeholder:text-slate-600 focus:outline-none focus:border-cyan-400 grow min-w-[220px]"
-          />
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          {isContradictory ? (
-            <button
-              onClick={() => handleAction('DISPATCH_TECH')}
-              disabled={isProcessing}
-              className="flex items-center gap-2 bg-rose-600 hover:bg-rose-500 text-white font-heading font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg shadow-rose-950 transition cursor-pointer"
-            >
-              <Wrench className="w-4 h-4" />
-              <span>Dispatch Field Technician (Multimeter Audit)</span>
-            </button>
-          ) : (
-            <>
-              <button
-                onClick={() => handleAction('APPROVE')}
-                disabled={isProcessing || isApproved}
-                className={`flex items-center gap-2 font-heading font-semibold text-xs px-4 py-2.5 rounded-xl shadow-lg transition ${
-                  isApproved 
-                    ? 'bg-emerald-800 text-emerald-200 cursor-not-allowed' 
-                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-950 cursor-pointer'
-                }`}
-              >
-                <CheckCircle className="w-4 h-4" />
-                <span>{isApproved ? "Approved & Dispatched" : "Approve Mitigation Plan"}</span>
-              </button>
-
-              <button
-                onClick={() => handleAction('OVERRIDE')}
-                disabled={isProcessing}
-                className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 hover:text-white font-heading font-semibold text-xs px-3.5 py-2.5 rounded-xl transition cursor-pointer"
-              >
-                <XCircle className="w-4 h-4 text-amber-400" />
-                <span>Override AI</span>
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
+      {recommendedMitigation && <div className="px-4 py-2 border-t border-slate-800/80 bg-slate-950/30 text-[8px] font-mono text-slate-600 truncate">Proposed action: <span className="text-slate-400">{recommendedMitigation}</span></div>}
+    </section>
   );
 }
