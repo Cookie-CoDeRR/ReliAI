@@ -1,0 +1,89 @@
+/* Extra animations for landing page */
+
+@keyframes floatUp {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+.animate-float { animation: floatUp 6s ease-in-out infinite; }
+
+@keyframes scanLine {
+  0% { transform: translateY(-100%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.6; }
+  100% { transform: translateY(2000%); opacity: 0; }
+}
+.animate-scanline { animation: scanLine 5s ease-in-out infinite; }
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-slide-up { animation: fadeSlideUp 0.7s ease forwards; }
+
+@keyframes countUp {
+  from { opacity: 0; transform: translateY(8px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-count-up { animation: countUp 0.5s ease forwards; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent, rgba(217,133,85,0.15), transparent);
+  background-size: 200% 100%;
+  animation: shimmer 2s linear infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(217, 133, 85, 0.4); }
+  70% { transform: scale(1); box-shadow: 0 0 0 12px rgba(217, 133, 85, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(217, 133, 85, 0); }
+}
+.animate-pulse-ring { animation: pulseRing 2.5s ease-in-out infinite; }
+
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.animate-marquee { animation: marquee 30s linear infinite; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.animate-blink { animation: blink 1.1s step-end infinite; }
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 15px rgba(217, 133, 85, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(217, 133, 85, 0.7); }
+}
+.animate-glow-pulse { animation: glowPulse 2.5s ease-in-out infinite; }
+
+@keyframes rotateSlowly {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-rotate-slow { animation: rotateSlowly 20s linear infinite; }
+
+/* Allow scrolling on landing & auth pages */
+.landing-scroll {
+  overflow-y: auto !important;
+  height: 100% !important;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 20px 40px -10px rgba(217, 133, 85, 0.18);
+}
+
+/* Landing page specific font body */
+.landing-body {
+  user-select: text !important;
+}

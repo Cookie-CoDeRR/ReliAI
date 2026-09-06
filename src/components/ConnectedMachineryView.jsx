@@ -26,7 +26,8 @@ import {
   Sparkles,
   Terminal,
   Layers,
-  Bot
+  Bot,
+  Search
 } from 'lucide-react';
 import RobotViewer from './RobotViewer';
 
@@ -304,12 +305,11 @@ export default function ConnectedMachineryView({
   isInvestigating = false,
   activeAgent = null
 }) {
-  const [selectedMachineId, setSelectedMachineId] = useState("KR-210-R2700");
+  const [selectedMachineId, setSelectedMachineId] = useState(null);
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [renderMode, setRenderMode] = useState("3D_TWIN"); // "3D_TWIN" | "PHOTO"
   const [isIncidentActive, setIsIncidentActive] = useState(true);
-  const [customMachineQuery, setCustomMachineQuery] = useState("");
   const [liveStreamedReasoning, setLiveStreamedReasoning] = useState("");
   const [isStreamingLocal, setIsStreamingLocal] = useState(false);
   const terminalBottomRef = useRef(null);
@@ -331,11 +331,10 @@ export default function ConnectedMachineryView({
     return true;
   });
 
-  // Handle asking "What's the problem with this device?" with real streaming
+  // Handle asking "What's the problem with this device?" with real streaming into sidebar chat
   const handleAskDeviceProblem = (promptOverride = null) => {
     if (!selectedMachine) return;
-    const query = promptOverride || customMachineQuery.trim() || `What is the problem with ${selectedMachine.name}? Diagnose telemetry anomalies, joint health, and root cause.`;
-    setCustomMachineQuery("");
+    const query = promptOverride || `What is the problem with ${selectedMachine.name}? Diagnose telemetry anomalies, joint health, and root cause.`;
     
     // Activate incident state on 3D twin
     setIsIncidentActive(true);
@@ -543,44 +542,28 @@ export default function ConnectedMachineryView({
                   </div>
                 </div>
 
-                {/* Interactive Diagnostic Inquiry Prompt Box */}
-                <div className="bg-[#faf5f0] rounded-[10px] border border-[#ecd7c7] p-2.5 flex flex-col justify-between gap-2 shadow-2xs">
+                {/* Autonomous Live Diagnostic Status Banner */}
+                <div className="bg-[#faf5f0] rounded-[10px] border border-[#ecd7c7] p-2.5 flex flex-col justify-between gap-1.5 shadow-2xs">
                   <div className="flex items-center justify-between">
                     <span className="font-mono text-[10.5px] font-bold text-slate-800 flex items-center gap-1.5">
                       <Terminal className="w-3.5 h-3.5 text-[#d98555]" />
-                      Autonomous Diagnostic Inquiry
+                      Autonomous Diagnostic Status
                     </span>
                     <span className="text-[8.5px] font-mono text-[#d98555] font-bold bg-white px-2 py-0.5 rounded border border-[#f0dfd3]">
                       LIVE HARNESS STREAMING
                     </span>
                   </div>
 
-                  <p className="text-[10px] font-mono text-slate-600 leading-relaxed">
-                    {isIncidentActive
-                      ? `⚠️ Active Anomaly on ${selectedMachine.name}: Joint 3 thermal elevation (82.4°C) with harmonic vibration resonance.`
-                      : `Normal operating conditions. All 6 kinematic axes synchronized with golden engineering baselines.`}
+                  <p className="text-[10px] font-mono text-slate-600 leading-relaxed flex items-center gap-1.5 flex-wrap">
+                    {isIncidentActive ? (
+                      <>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                        <span>Active Anomaly on {selectedMachine.name}: Joint 3 thermal elevation (82.4°C) with harmonic vibration resonance.</span>
+                      </>
+                    ) : (
+                      <span>Normal operating conditions. All 6 kinematic axes synchronized with golden engineering baselines.</span>
+                    )}
                   </p>
-
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={customMachineQuery}
-                      onChange={(e) => setCustomMachineQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") handleAskDeviceProblem();
-                      }}
-                      placeholder={`Ask harness: What's the problem with ${selectedMachine.name}?`}
-                      className="flex-1 bg-white border border-slate-200 rounded-[8px] px-2.5 py-1.5 text-xs font-mono placeholder:text-slate-400 focus:outline-none focus:border-[#d98555]"
-                    />
-                    <button
-                      onClick={() => handleAskDeviceProblem()}
-                      disabled={isInvestigating}
-                      className="px-3 py-1.5 rounded-[8px] bg-[#d98555] hover:bg-[#c8764b] text-white text-xs font-mono font-bold transition cursor-pointer flex items-center gap-1 shrink-0 disabled:opacity-50"
-                    >
-                      <Send className="w-3 h-3" />
-                      <span>Diagnose</span>
-                    </button>
-                  </div>
                 </div>
 
                 {/* 6-Axis Real-Time Joint Telemetry Matrix */}
@@ -710,21 +693,33 @@ export default function ConnectedMachineryView({
               </p>
             </div>
 
-            {/* Filter Tabs */}
-            <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-[8px] shrink-0">
-              {["ALL", "INVESTIGATING", "NOMINAL", "STANDBY"].map(status => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-2 py-0.5 rounded-[6px] text-[9.5px] font-mono font-semibold transition cursor-pointer ${
-                    filterStatus === status
-                      ? "bg-white text-[#c8764b] shadow-2xs"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
-                >
-                  {status}
-                </button>
-              ))}
+            {/* Search and Filter Tabs */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="w-3 h-3 text-slate-400 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search fleet..."
+                  className="pl-6 pr-2 py-1 text-[10px] font-mono bg-slate-100 border border-slate-200/80 rounded-[6px] text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-[#d98555] w-28 sm:w-36 transition"
+                />
+              </div>
+              <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-[8px] shrink-0">
+                {["ALL", "INVESTIGATING", "NOMINAL", "STANDBY"].map(status => (
+                  <button
+                    key={status}
+                    onClick={() => setFilterStatus(status)}
+                    className={`px-2 py-0.5 rounded-[6px] text-[9.5px] font-mono font-semibold transition cursor-pointer ${
+                      filterStatus === status
+                        ? "bg-white text-[#c8764b] shadow-2xs"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

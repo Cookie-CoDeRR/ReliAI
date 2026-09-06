@@ -13,8 +13,10 @@ import ConnectedMachineryView from './components/ConnectedMachineryView';
 import InvestigationReportView from './components/InvestigationReportView';
 import LivePipelineVisualizer from './components/pipeline/LivePipelineVisualizer';
 import ToolboxExplorerView from './components/ToolboxExplorerView';
-import LandingPageView from './components/LandingPageView';
 import AuthModal from './components/AuthModal';
+import LandingPage from './components/LandingPage';
+import AuthPage from './components/AuthPage';
+import { MACHINERY_PROJECTS } from './data/machineryProjects';
 import { subscribeToAuthChanges, logoutUser } from './services/firebase';
 import {
   fetchScenarios,
@@ -46,35 +48,272 @@ import {
   Cpu,
   Layers,
   CheckCircle2,
-  FileCheck2
+  FileCheck2,
+  ExternalLink,
+  Bot,
+  Bell,
+  SlidersHorizontal,
+  Download,
+  BarChart3,
+  History,
+  Filter,
+  ArrowUpDown,
+  BookOpen,
+  Radio
 } from 'lucide-react';
+
+const SEARCH_DATABASE = [
+  // Machinery Projects
+  {
+    id: "proj-kr210",
+    title: "KUKA KR-210 R2700",
+    category: "MACHINERY",
+    categoryLabel: "Robot Cell",
+    subtitle: "Cell 04 • Heavy Handling • HARNESS-A4",
+    description: "6-Axis Heavy Articulated. Joint 3 Harmonic Drive Lubricant Breakdown & 88.5°C Overheat.",
+    severity: "CRITICAL",
+    severityColor: "bg-rose-50 text-rose-700 border-rose-200",
+    projectId: "KR-210-R2700",
+    tab: "Streaming Visualisation"
+  },
+  {
+    id: "proj-fanuc-m900",
+    title: "FANUC M-900iB/700 Ultra",
+    category: "MACHINERY",
+    categoryLabel: "Robot Cell",
+    subtitle: "Cell 02 • High-Precision Spot Welding • HARNESS-D2",
+    description: "Heavy Spot Welding. Thermocouple Signal Lead Ground Short (False 92°C Overheat).",
+    severity: "ALERT",
+    severityColor: "bg-amber-50 text-amber-700 border-amber-300",
+    projectId: "FANUC-M900iB",
+    tab: "Evidence Inspector"
+  },
+  {
+    id: "proj-abb-irb6700",
+    title: "ABB IRB 6700 PowerSpot",
+    category: "MACHINERY",
+    categoryLabel: "Robot Cell",
+    subtitle: "Cell 01 • Press Shop & Material Transfer • HARNESS-C1",
+    description: "Press Automation. End-Effector Pneumatic Pressure Drop (3.1 bar Low Sag).",
+    severity: "WARNING",
+    severityColor: "bg-amber-50 text-amber-600 border-amber-200",
+    projectId: "ABB-IRB-6700",
+    tab: "Connected Machinery"
+  },
+  {
+    id: "proj-kuka-quantum",
+    title: "KUKA KR-QUANTUM 300",
+    category: "MACHINERY",
+    categoryLabel: "Robot Cell",
+    subtitle: "Cell 05 • Precision Machining & Milling • HARNESS-B3",
+    description: "High-Payload Milling. Stator High-Frequency Inverter Harmonics & Axis 2 Backlash.",
+    severity: "WARNING",
+    severityColor: "bg-amber-50 text-amber-600 border-amber-200",
+    projectId: "KUKA-QUANTUM-300",
+    tab: "Streaming Visualisation"
+  },
+  {
+    id: "proj-michelin-conveyor",
+    title: "Michelin Tire Conveyor Line 3",
+    category: "MACHINERY",
+    categoryLabel: "Conveyor Line",
+    subtitle: "Station 06 • Tire Transfer & Bead Lube • HARNESS-E5",
+    description: "Automated Belt Line. Drive Motor Belt Micro-Slippage & Lube Pressure Sag.",
+    severity: "WARNING",
+    severityColor: "bg-amber-50 text-amber-600 border-amber-200",
+    projectId: "CONVEYOR-LINE-3",
+    tab: "Evidence Inspector"
+  },
+
+  // SOPs & Engineering Standards
+  {
+    id: "sop-iso10218",
+    title: "ISO 10218-1 Industrial Robot Operating Limits",
+    category: "SOPS",
+    categoryLabel: "Engineering SOP",
+    subtitle: "Standard Specification • Golden Bounds",
+    description: "Defines maximum continuous operating joint temperature (<55°C) and torque limits.",
+    severity: "INFO",
+    severityColor: "bg-blue-50 text-blue-700 border-blue-200",
+    actionQuery: "Audit ISO 10218-1 compliance for active robot cell",
+    tab: "Toolbox & Hub"
+  },
+  {
+    id: "sop-csg-lube",
+    title: "CSG-25-100 Harmonic Drive Lubrication Protocol",
+    category: "SOPS",
+    categoryLabel: "Maintenance SOP",
+    subtitle: "Mobilgrease 28 • Elastohydrodynamic Film Specs",
+    description: "Purge and grease replenishment procedures for Harmonic Drive flexspline gear teeth.",
+    severity: "INFO",
+    severityColor: "bg-blue-50 text-blue-700 border-blue-200",
+    actionQuery: "Retrieve CSG-25-100 lubrication maintenance procedure",
+    tab: "Toolbox & Hub"
+  },
+  {
+    id: "sop-pneu-manifold",
+    title: "SOP-PNEU-702 Pneumatic Manifold & Vacuum Gripper",
+    category: "SOPS",
+    categoryLabel: "Maintenance SOP",
+    subtitle: "Air Supply 6.0 Bar • Valve & Seal Leak Audit",
+    description: "Troubleshooting vacuum seal wear, pneumatic line pressure drops, and regulator leaks.",
+    severity: "INFO",
+    severityColor: "bg-blue-50 text-blue-700 border-blue-200",
+    actionQuery: "Check SOP-PNEU-702 pneumatic seal inspection steps",
+    tab: "Toolbox & Hub"
+  },
+  {
+    id: "sop-thermocouple",
+    title: "SOP-THERM-401 K-Type Thermocouple Calibration",
+    category: "SOPS",
+    categoryLabel: "Diagnostics SOP",
+    subtitle: "Cable Carrier Flex Fatigue • Ground Short Isolation",
+    description: "Procedure for isolating intermittent ground shorts vs actual stator heating.",
+    severity: "INFO",
+    severityColor: "bg-blue-50 text-blue-700 border-blue-200",
+    actionQuery: "Inspect thermocouple harness ground short per SOP-THERM-401",
+    tab: "Evidence Inspector"
+  },
+
+  // Telemetry Signals & Alarms
+  {
+    id: "telem-therm-j3",
+    title: "Joint 3 Thermal Infrared Hotspot Telemetry",
+    category: "TELEMETRY",
+    categoryLabel: "Live Telemetry Bus",
+    subtitle: "88.5°C Breach • Optris Xi-400 Radiometric Stream",
+    description: "Live infrared thermography sensor reading on elbow articulation axis.",
+    severity: "CRITICAL",
+    severityColor: "bg-rose-50 text-rose-700 border-rose-200",
+    actionQuery: "Inspect Joint 3 thermal infrared telemetry and delta",
+    tab: "Evidence Inspector"
+  },
+  {
+    id: "telem-fft-vibe",
+    title: "Acoustic FFT Vibration Harmonic (73.5 Hz 3X)",
+    category: "TELEMETRY",
+    categoryLabel: "Sensor Bus",
+    subtitle: "0.38g Peak • PCB Piezotronics Accelerometer",
+    description: "Contact microphone frequency spectrum indicating metal-on-metal micro-friction.",
+    severity: "ALERT",
+    severityColor: "bg-amber-50 text-amber-700 border-amber-300",
+    actionQuery: "Analyze 73.5 Hz 3X FFT acoustic vibration peak",
+    tab: "Evidence Inspector"
+  },
+  {
+    id: "telem-air-pressure",
+    title: "End-Effector Pneumatic Pressure Bus (3.1 bar)",
+    category: "TELEMETRY",
+    categoryLabel: "Pneumatic Sensor",
+    subtitle: "Air Supply Sag • Nominal: 6.0 bar",
+    description: "Real-time pneumatic line pressure reading from Festo pressure transmitter.",
+    severity: "WARNING",
+    severityColor: "bg-amber-50 text-amber-600 border-amber-200",
+    actionQuery: "Check pneumatic pressure telemetry drop to 3.1 bar",
+    tab: "Evidence Inspector"
+  }
+];
 
 export default function App() {
   const [activeTab, setActiveTab] = useState("Dashboard");
   const [searchQuery, setSearchQuery] = useState("");
   const [landingQuery, setLandingQuery] = useState("");
   const [scenarios, setScenarios] = useState([]);
-  const [activeScenarioId, setActiveScenarioId] = useState("SCENARIO-01-THERMAL-OVERHEAT");
+  const [selectedProjectId, setSelectedProjectId] = useState("KR-210-R2700");
+  const activeProject = MACHINERY_PROJECTS.find(p => p.id === selectedProjectId) || MACHINERY_PROJECTS[0];
+
+  const [activeScenarioId, setActiveScenarioId] = useState(MACHINERY_PROJECTS[0].scenarioId);
   const [currentIncidentId, setCurrentIncidentId] = useState(null);
   const [selectedIncidentId, setSelectedIncidentId] = useState(null);
   const [status, setStatus] = useState("PENDING_APPROVAL");
   const [isInvestigating, setIsInvestigating] = useState(false);
   const [activeAgent, setActiveAgent] = useState(null);
   const [agentTraces, setAgentTraces] = useState([]);
-  const [telemetry, setTelemetry] = useState({});
-  const [verdict, setVerdict] = useState(null);
-  const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
-  const [generatedReport, setGeneratedReport] = useState(null);
+  const [telemetry, setTelemetry] = useState(MACHINERY_PROJECTS[0].snapshot || {});
+  const [verdict, setVerdict] = useState({
+    status: MACHINERY_PROJECTS[0].verifiedReport.investigation_results.status,
+    final_confidence_score: MACHINERY_PROJECTS[0].verifiedReport.investigation_results.final_confidence_score,
+    primary_root_cause: MACHINERY_PROJECTS[0].verifiedReport.root_cause,
+    critic_report: MACHINERY_PROJECTS[0].verifiedReport.critic_findings
+  });
+  const [activeFaultJoint, setActiveFaultJoint] = useState(MACHINERY_PROJECTS[0].faultJoint);
+  const [generatedReport, setGeneratedReport] = useState(MACHINERY_PROJECTS[0].verifiedReport);
   const [streamingSubView, setStreamingSubView] = useState("REPORT"); // "GRAPH" | "REPORT"
+
+  const handleSelectProject = (projectId) => {
+    setSelectedProjectId(projectId);
+    const proj = MACHINERY_PROJECTS.find(p => p.id === projectId);
+    if (!proj) return;
+    setActiveScenarioId(proj.scenarioId);
+    setActiveFaultJoint(proj.faultJoint);
+    if (proj.snapshot) {
+      setTelemetry(proj.snapshot);
+    }
+    if (proj.verifiedReport) {
+      setGeneratedReport(proj.verifiedReport);
+      setVerdict({
+        status: proj.verifiedReport.investigation_results.status,
+        final_confidence_score: proj.verifiedReport.investigation_results.final_confidence_score,
+        primary_root_cause: proj.verifiedReport.root_cause,
+        critic_report: proj.verifiedReport.critic_findings
+      });
+    }
+  };
   const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const [isHistoryDrawerOpen, setIsHistoryDrawerOpen] = useState(false);
   const [modelOnline, setModelOnline] = useState(true);
   const [isPromptDropdownOpen, setIsPromptDropdownOpen] = useState(false);
   const [attachedLandingDoc, setAttachedLandingDoc] = useState(null);
 
+  // Top Bar Notifications & Options States
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
+  const notificationsRef = useRef(null);
+  const moreOptionsRef = useRef(null);
+
+  const [notifications, setNotifications] = useState([
+    {
+      id: "notif-1",
+      title: "FANUC M-900iB: Anomaly Contradiction Flagged",
+      message: "Thermocouple spiked to 92°C with 0ms ramp. Critic vetoed false thermal shutdown.",
+      timestamp: "2m ago",
+      type: "ALERT",
+      unread: true,
+      projectId: "FANUC-M900iB"
+    },
+    {
+      id: "notif-2",
+      title: "KUKA KR-210 R2700: 73.5 Hz Vibration Resonance",
+      message: "Operating temperature reached 88.5°C with 3X harmonic vibration. Lubricant shear breakdown.",
+      timestamp: "14m ago",
+      type: "CRITICAL",
+      unread: true,
+      projectId: "KR-210-R2700"
+    },
+    {
+      id: "notif-3",
+      title: "ABB IRB 6700: Pneumatic Line Pressure Sag",
+      message: "Pneumatic bus pressure dropped to 3.1 bar (nominal 6.0 bar). End-effector clamp seal wear.",
+      timestamp: "32m ago",
+      type: "WARNING",
+      unread: false,
+      projectId: "ABB-IRB-6700"
+    },
+    {
+      id: "notif-4",
+      title: "Autonomous Critic Audit Passed",
+      message: "Plant-wide golden engineering bounds verified for Station 01-06 under ISO-10218-1.",
+      timestamp: "1h ago",
+      type: "SUCCESS",
+      unread: false
+    }
+  ]);
+
   const [gpuStats, setGpuStats] = useState(null);
   const [user, setUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  // 'landing' | 'auth' | 'app'
+  const [appView, setAppView] = useState('landing');
 
   // Global synchronized Copilot chat messages
   const [chatMessages, setChatMessages] = useState([
@@ -90,6 +329,91 @@ export default function App() {
   const currentAbortRef = useRef(null);
   const landingFileInputRef = useRef(null);
   const promptDropdownRef = useRef(null);
+
+  // Search Bar Dropdown & Sorting States
+  const [isSearchDropdownOpen, setIsSearchDropdownOpen] = useState(false);
+  const [searchCategory, setSearchCategory] = useState("ALL"); // "ALL" | "MACHINERY" | "SOPS" | "TELEMETRY"
+  const [searchSortBy, setSearchSortBy] = useState("RELEVANCE"); // "RELEVANCE" | "SEVERITY" | "ALPHABETICAL"
+  const searchContainerRef = useRef(null);
+
+  // Filtered & Sorted Search Results
+  const filteredSearchResults = SEARCH_DATABASE.filter(item => {
+    if (searchCategory !== "ALL" && item.category !== searchCategory) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        item.title.toLowerCase().includes(q) ||
+        item.subtitle.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q)
+      );
+    }
+    return true;
+  }).sort((a, b) => {
+    if (searchSortBy === "SEVERITY") {
+      const rank = { CRITICAL: 4, ALERT: 3, WARNING: 2, INFO: 1 };
+      return (rank[b.severity] || 0) - (rank[a.severity] || 0);
+    }
+    if (searchSortBy === "ALPHABETICAL") {
+      return a.title.localeCompare(b.title);
+    }
+    // Default RELEVANCE
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const aTitle = a.title.toLowerCase().includes(q);
+      const bTitle = b.title.toLowerCase().includes(q);
+      if (aTitle && !bTitle) return -1;
+      if (!aTitle && bTitle) return 1;
+    }
+    return 0;
+  });
+
+  const handleSelectSearchResult = (item) => {
+    if (item.projectId) {
+      handleSelectProject(item.projectId);
+    }
+    if (item.tab) {
+      setActiveTab(item.tab);
+    }
+    if (item.actionQuery) {
+      handleGlobalSendMessage(item.actionQuery);
+    }
+    setSearchQuery("");
+    setIsSearchDropdownOpen(false);
+  };
+
+  // Close notifications, more options, and search dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(e.target)) {
+        setIsNotificationsOpen(false);
+      }
+      if (moreOptionsRef.current && !moreOptionsRef.current.contains(e.target)) {
+        setIsMoreOptionsOpen(false);
+      }
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target)) {
+        setIsSearchDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleExportTelemetry = () => {
+    const exportData = {
+      project: activeProject,
+      telemetry,
+      verdict,
+      timestamp: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ReliAI_${activeProject.id}_Telemetry_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setIsMoreOptionsOpen(false);
+  };
 
   // Subscribe to Firebase Authentication state changes
   useEffect(() => {
@@ -409,7 +733,9 @@ export default function App() {
     };
 
     setChatMessages(prev => [...prev, userMsg]);
-    setActiveTab("Streaming Visualisation");
+    if (activeTab !== "Connected Machinery") {
+      setActiveTab("Streaming Visualisation");
+    }
 
     let uploadId = null;
     if (currentAttached?.raw) {
@@ -450,7 +776,7 @@ export default function App() {
     }
 
     // Trigger live multi-agent investigation harness with streamed reasoning
-    handleTriggerScenario(targetScenario, true, userPrompt);
+    handleTriggerScenario(targetScenario, activeTab !== "Connected Machinery", userPrompt);
   };
 
 
@@ -480,8 +806,33 @@ export default function App() {
     (verdict && verdict.status === "CONCLUSIVE" && verdict.primary_root_cause?.title)
   );
 
+  // ── Public landing page (pre-auth) ──────────────────────────────────────
+  if (appView === 'landing') {
+    return (
+      <LandingPage
+        user={user}
+        onEnterApp={() => setAppView('app')}
+        onOpenAuth={() => setAppView('auth')}
+      />
+    );
+  }
+
+  // ── Authentication page ──────────────────────────────────────────────────
+  if (appView === 'auth') {
+    return (
+      <AuthPage
+        onSuccess={(authenticatedUser) => {
+          setUser(authenticatedUser);
+          setAppView('app');
+        }}
+        onBack={() => setAppView('landing')}
+      />
+    );
+  }
+
+  // ── Main app shell ───────────────────────────────────────────────────────
   return (
-    <div className="h-screen w-screen overflow-hidden pt-3 sm:pt-3.5 pb-2.5 sm:pb-3 px-3 sm:px-4 flex flex-col font-sans antialiased select-none relative bg-[#eddcd0]">
+    <div className="h-screen w-screen overflow-hidden pt-6 sm:pt-7 lg:pt-8 pb-3 sm:pb-4 lg:pb-5 px-3.5 sm:px-5 lg:px-6 flex flex-col font-sans antialiased select-none relative bg-[#eddcd0]">
       {/* Blurred background wave layer */}
       <div
         className="absolute inset-0 bg-cover bg-center filter blur-[12px] scale-105 opacity-90 pointer-events-none z-0"
@@ -498,7 +849,7 @@ export default function App() {
       <div className="h-full w-full rounded-[12px] flex flex-col justify-between overflow-hidden relative z-10">
         
         {/* TOP HEADER: ReliAI Logo Left with Underline, Centered Search Bar */}
-        <header className="relative w-full h-10 shrink-0 flex items-center justify-between px-1 sm:px-2 mb-2 sm:mb-2.5">
+        <header className="relative w-full h-10 sm:h-11 shrink-0 flex items-center justify-between px-1 sm:px-2 mb-3 sm:mb-3.5 lg:mb-4">
           {/* Left: ReliAI Logo in Jersey 10 font with horizontal wireframe underline */}
           <div className="flex flex-col z-10 cursor-pointer shrink-0" onClick={() => setActiveTab("Dashboard")}>
             <span className="font-jersey text-white text-3xl sm:text-4xl font-bold tracking-wider leading-none select-none drop-shadow-sm">
@@ -507,23 +858,302 @@ export default function App() {
             <div className="w-44 sm:w-52 h-[1.5px] bg-white/70 mt-1" />
           </div>
 
-          {/* Top Centered Search Bar: [ 🔍 |          ] */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 w-[88%] max-w-[380px] sm:max-w-[480px] md:max-w-[560px] h-8 bg-white/95 backdrop-blur-md rounded-[8px] shadow-xs border border-white/90 flex items-center px-3 gap-2.5 z-20">
-            <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            <div className="w-[1px] h-3.5 bg-slate-200 shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  handleGlobalSendMessage(searchQuery);
-                  setSearchQuery("");
-                }
-              }}
-              placeholder="Search telemetry, SOPs, or trigger diagnostics..."
-              className="w-full bg-transparent text-xs font-mono text-slate-800 placeholder:text-slate-400 outline-none"
-            />
+          {/* Top Centered Search Bar & Quick Actions: [ 🔍 | Search...  ⌘K ] [ 🔔 ] [ ⚙️ ] */}
+          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 flex items-center gap-1.5 sm:gap-2 z-20">
+            
+            {/* Search Input Bar with Live Options Dropdown & Sorting */}
+            <div className="relative" ref={searchContainerRef}>
+              <div 
+                onClick={() => setIsSearchDropdownOpen(true)}
+                className="w-[240px] sm:w-[320px] md:w-[400px] lg:w-[440px] h-8 sm:h-8.5 bg-white/95 backdrop-blur-md rounded-[8px] shadow-xs border border-white/90 flex items-center px-3 gap-2 transition-all focus-within:ring-2 focus-within:ring-[#d98555]/30 focus-within:border-white"
+              >
+                <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <div className="w-[1px] h-3.5 bg-slate-200 shrink-0" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onFocus={() => setIsSearchDropdownOpen(true)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (!isSearchDropdownOpen) setIsSearchDropdownOpen(true);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (filteredSearchResults.length > 0) {
+                        handleSelectSearchResult(filteredSearchResults[0]);
+                      } else {
+                        handleGlobalSendMessage(searchQuery);
+                        setSearchQuery("");
+                        setIsSearchDropdownOpen(false);
+                      }
+                    } else if (e.key === "Escape") {
+                      setIsSearchDropdownOpen(false);
+                    }
+                  }}
+                  placeholder="Search telemetry, SOPs, or trigger diagnostics..."
+                  className="w-full bg-transparent text-xs font-mono text-slate-800 placeholder:text-slate-400 outline-none"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearchQuery("");
+                    }}
+                    className="text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                ) : (
+                  <kbd className="hidden md:inline-block text-[9px] font-mono text-slate-400 bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200 shrink-0 select-none">
+                    ⌘K
+                  </kbd>
+                )}
+              </div>
+
+              {/* Floating Search Results & Sorting Dropdown */}
+              {isSearchDropdownOpen && (
+                <div className="absolute top-full mt-2 left-0 w-[290px] sm:w-[380px] md:w-[480px] lg:w-[520px] bg-white/95 backdrop-blur-2xl border border-white/95 rounded-2xl p-3 shadow-[0_20px_50px_rgba(217,133,85,0.25),0_4px_16px_rgba(0,0,0,0.06)] z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  
+                  {/* Category Filter Chips & Sort Selector Header */}
+                  <div className="flex flex-wrap items-center justify-between pb-2 border-b border-slate-100 gap-1.5 mb-2">
+                    {/* Category Filter Chips */}
+                    <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-[6px] text-[10px] font-mono">
+                      {[
+                        { id: "ALL", label: "All" },
+                        { id: "MACHINERY", label: "Machinery" },
+                        { id: "SOPS", label: "SOPs & Specs" },
+                        { id: "TELEMETRY", label: "Telemetry" }
+                      ].map(cat => (
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSearchCategory(cat.id);
+                          }}
+                          className={`px-2 py-0.5 rounded-[4px] font-medium transition cursor-pointer ${
+                            searchCategory === cat.id
+                              ? "bg-white text-[#c8764b] font-bold shadow-2xs"
+                              : "text-slate-600 hover:text-slate-900"
+                          }`}
+                        >
+                          {cat.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Sorting Dropdown */}
+                    <div className="flex items-center gap-1 font-mono text-[10px] text-slate-500">
+                      <ArrowUpDown className="w-3 h-3 text-[#d98555]" />
+                      <span className="hidden sm:inline">Sort:</span>
+                      <select
+                        value={searchSortBy}
+                        onChange={(e) => setSearchSortBy(e.target.value)}
+                        className="bg-transparent text-[10px] font-bold text-slate-700 focus:outline-none cursor-pointer"
+                      >
+                        <option value="RELEVANCE">Relevance</option>
+                        <option value="SEVERITY">Severity</option>
+                        <option value="ALPHABETICAL">A-Z</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Results Count & Quick Status */}
+                  <div className="flex items-center justify-between px-1 mb-1.5 text-[9.5px] font-mono text-slate-400">
+                    <span>{filteredSearchResults.length} Results found</span>
+                    <span>Press Enter to select</span>
+                  </div>
+
+                  {/* Search Results List */}
+                  <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                    {filteredSearchResults.length === 0 ? (
+                      <div className="p-4 text-center text-xs font-mono text-slate-400">
+                        No telemetry or SOPs match "{searchQuery}"
+                      </div>
+                    ) : (
+                      filteredSearchResults.map(item => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleSelectSearchResult(item)}
+                          className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5]/80 border border-transparent hover:border-[#f3cdb6] transition group/item flex items-start gap-2.5 cursor-pointer"
+                        >
+                          <div className="w-6 h-6 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 mt-0.5 group-hover/item:border-[#d98555] transition shadow-2xs">
+                            {item.category === "MACHINERY" ? (
+                              <Bot className="w-3.5 h-3.5 text-[#d98555]" />
+                            ) : item.category === "SOPS" ? (
+                              <BookOpen className="w-3.5 h-3.5 text-[#c8764b]" />
+                            ) : (
+                              <Radio className="w-3.5 h-3.5 text-amber-600" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="text-[11.5px] font-mono font-bold text-slate-900 group-hover/item:text-[#c8764b] transition truncate">
+                                {item.title}
+                              </div>
+                              <span className={`text-[8px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${item.severityColor}`}>
+                                {item.categoryLabel}
+                              </span>
+                            </div>
+                            <div className="text-[9.5px] font-mono text-slate-500 truncate">
+                              {item.subtitle}
+                            </div>
+                            <div className="text-[9px] text-slate-600 line-clamp-1 mt-0.5">
+                              {item.description}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 self-center opacity-0 group-hover/item:opacity-100 transition text-[#d98555]">
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+
+            {/* Notifications Bell with Dropdown */}
+            <div className="relative" ref={notificationsRef}>
+              <button
+                type="button"
+                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                className={`relative p-2 rounded-[8px] bg-white/95 hover:bg-white border border-white/90 shadow-xs transition cursor-pointer flex items-center justify-center text-slate-600 hover:text-[#c8764b] ${
+                  isNotificationsOpen ? 'ring-2 ring-[#d98555]/30' : ''
+                }`}
+                title="Industrial Alerts & Notifications"
+              >
+                <Bell className="w-3.5 h-3.5" />
+                {notifications.some(n => n.unread) && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white animate-pulse" />
+                )}
+              </button>
+
+              {/* Notifications Dropdown Drawer */}
+              {isNotificationsOpen && (
+                <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 sm:translate-x-0 sm:left-auto sm:right-0 w-80 sm:w-96 bg-white/95 backdrop-blur-2xl border border-white/95 rounded-2xl p-3 shadow-[0_20px_50px_rgba(217,133,85,0.22),0_4px_16px_rgba(0,0,0,0.06)] z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
+                    <div className="flex items-center gap-1.5 font-mono text-xs font-bold text-slate-900">
+                      <Bell className="w-3.5 h-3.5 text-[#d98555]" />
+                      <span>Industrial Alerts</span>
+                      <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-rose-50 text-rose-600 border border-rose-200 font-bold">
+                        {notifications.filter(n => n.unread).length} Unread
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setNotifications(prev => prev.map(n => ({ ...n, unread: false })))}
+                      className="text-[10px] font-mono text-slate-400 hover:text-[#c8764b] transition cursor-pointer"
+                    >
+                      Mark all read
+                    </button>
+                  </div>
+
+                  <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                    {notifications.map(notif => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          if (notif.projectId) handleSelectProject(notif.projectId);
+                          setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, unread: false } : n));
+                          setIsNotificationsOpen(false);
+                        }}
+                        className={`p-2 rounded-[10px] border transition cursor-pointer text-left ${
+                          notif.unread
+                            ? 'bg-[#fffbf8] border-[#f3cdb6] hover:bg-[#faeee5]'
+                            : 'bg-slate-50/70 border-slate-100 hover:bg-slate-100/70'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-[8.5px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                            notif.type === 'CRITICAL'
+                              ? 'bg-rose-50 text-rose-600 border-rose-200'
+                              : notif.type === 'ALERT'
+                              ? 'bg-amber-50 text-amber-700 border-amber-300'
+                              : notif.type === 'WARNING'
+                              ? 'bg-amber-50 text-amber-600 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}>
+                            {notif.type}
+                          </span>
+                          <span className="text-[8.5px] font-mono text-slate-400">{notif.timestamp}</span>
+                        </div>
+                        <div className="text-[11px] font-semibold text-slate-900 leading-tight font-mono">
+                          {notif.title}
+                        </div>
+                        <div className="text-[9.5px] text-slate-600 mt-0.5 line-clamp-2 leading-relaxed font-mono">
+                          {notif.message}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* More Options Menu with Dropdown */}
+            <div className="relative" ref={moreOptionsRef}>
+              <button
+                type="button"
+                onClick={() => setIsMoreOptionsOpen(!isMoreOptionsOpen)}
+                className={`p-2 rounded-[8px] bg-white/95 hover:bg-white border border-white/90 shadow-xs transition cursor-pointer flex items-center justify-center text-slate-600 hover:text-[#c8764b] ${
+                  isMoreOptionsOpen ? 'ring-2 ring-[#d98555]/30' : ''
+                }`}
+                title="System Tools & Options"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </button>
+
+              {/* More Options Dropdown Menu */}
+              {isMoreOptionsOpen && (
+                <div className="absolute top-full mt-2 right-0 w-64 bg-white/95 backdrop-blur-2xl border border-white/95 rounded-2xl p-2 shadow-[0_20px_50px_rgba(217,133,85,0.22),0_4px_16px_rgba(0,0,0,0.06)] z-50 animate-in fade-in slide-in-from-top-2 duration-200 font-mono text-[11px]">
+                  <div className="px-2.5 py-1.5 flex items-center justify-between border-b border-slate-100 mb-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-400">System Actions</span>
+                    <span className="text-[9px] text-[#c8764b]">v2.4 Live</span>
+                  </div>
+
+                  <button
+                    onClick={() => { setIsAnalyticsOpen(true); setIsMoreOptionsOpen(false); }}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <BarChart3 className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>Fleet Health Analytics</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setIsHistoryDrawerOpen(true); setIsMoreOptionsOpen(false); }}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <History className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>Incident History Ledger</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      handleTriggerScenario(activeProject.scenarioId, false, `System diagnostic probe for ${activeProject.name}`);
+                      setIsMoreOptionsOpen(false);
+                    }}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>Trigger Anomaly Probe</span>
+                  </button>
+
+                  <button
+                    onClick={handleExportTelemetry}
+                    className="w-full text-left p-2 rounded-xl hover:bg-[#faeee5] text-slate-700 hover:text-[#c8764b] flex items-center gap-2 transition cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5 text-[#d98555]" />
+                    <span>Export Telemetry (JSON)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
           </div>
 
           {/* Right Header: System & GPU Status Indicator + User Auth */}
@@ -538,6 +1168,17 @@ export default function App() {
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
               <span>HARNESS LIVE</span>
             </span>
+
+            {/* Return to Public Landing Page */}
+            <button
+              type="button"
+              onClick={() => setAppView('landing')}
+              title="Return to Public Site"
+              className="hidden lg:flex items-center gap-1 text-slate-600 hover:text-[#c8764b] px-2.5 py-1 bg-white/80 hover:bg-white rounded-[8px] border border-white/90 shadow-2xs transition cursor-pointer text-[11px]"
+            >
+              <ExternalLink className="w-3 h-3 text-[#d98555]" />
+              <span>Public Site</span>
+            </button>
 
             {/* Firebase Auth User Pill / Sign In Trigger */}
             {user ? (
@@ -570,23 +1211,11 @@ export default function App() {
         </header>
 
         {/* WORKSPACE CONTENT AREA */}
-        <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch overflow-hidden pt-0.5">
+        <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch overflow-hidden pt-1 sm:pt-1.5">
           
           {/* LEFT SIDEBAR: Clean white card */}
           <aside className="w-[165px] sm:w-[185px] md:w-[200px] h-full bg-white/95 backdrop-blur-md rounded-[12px] p-4 sm:p-5 shadow-xs border border-white/80 flex flex-col justify-start shrink-0">
             <div className="flex flex-col space-y-3 sm:space-y-4 text-left">
-              <button
-                onClick={() => setActiveTab("Landing")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight flex items-center justify-between ${
-                  activeTab === "Landing"
-                    ? "text-[#c8764b] font-semibold"
-                    : "text-slate-800 hover:text-[#c8764b]"
-                }`}
-              >
-                <span>Landing Page</span>
-                <span className="text-[9.5px] uppercase font-mono px-1.5 py-0.2 bg-[#faeee5] text-[#c8764b] rounded-[4px] border border-[#ecd7c7]">Home</span>
-              </button>
-
               <button
                 onClick={() => setActiveTab("Dashboard")}
                 className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
@@ -667,15 +1296,7 @@ export default function App() {
           </aside>
 
           {/* MAIN STAGE */}
-          {activeTab === "Landing" ? (
-            <main className="flex-1 min-w-0 h-full bg-white/95 backdrop-blur-md rounded-[12px] border border-white/80 shadow-xs overflow-y-auto">
-              <LandingPageView 
-                onEnterApp={() => setActiveTab("Dashboard")} 
-                onOpenAuth={() => setIsAuthModalOpen(true)} 
-                user={user} 
-              />
-            </main>
-          ) : isDashboardTab ? (
+          {isDashboardTab ? (
             /* ============================================================ */
             /* TAB 1: MAIN LANDING DASHBOARD (Clean, Spacious, No 3D Box)  */
             /* ============================================================ */
@@ -866,7 +1487,7 @@ export default function App() {
               
               {/* MIDDLE COLUMN */}
               {activeTab === "Live Pipeline" ? (
-                <div className="flex-1 min-w-0 h-full overflow-hidden">
+                <div className="flex-1 min-w-0 h-full overflow-hidden rounded-[10px] sm:rounded-[12px] border border-white/80 shadow-xs">
                   <LivePipelineVisualizer
                     activeScenarioId={activeScenarioId}
                     isInvestigating={isInvestigating}
@@ -889,7 +1510,7 @@ export default function App() {
                       }
                       handleTriggerScenario(
                         scenarioId,
-                        true,
+                        false,
                         prompt || `Simulate incident on ${machineId}: What is the problem with this device?`
                       );
                     }}
@@ -909,8 +1530,8 @@ export default function App() {
                 /* ============================================================ */
                 <div className="flex-1 min-w-0 h-full flex flex-col gap-2.5 overflow-hidden">
                   
-                  {/* Top Mode Selector Bar */}
-                  <div className="shrink-0 flex items-center justify-between px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-[8px] border border-white/80 shadow-2xs">
+                  {/* Top Mode Selector & Project Bar */}
+                  <div className="shrink-0 flex flex-wrap items-center justify-between px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-[8px] border border-white/80 shadow-2xs gap-2">
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => setStreamingSubView("GRAPH")}
@@ -937,10 +1558,27 @@ export default function App() {
                       </button>
                     </div>
 
+                    {/* Grounded Machinery Project Selector */}
+                    <div className="flex items-center gap-1.5 bg-[#faf5f0] border border-[#ecd7c7] rounded-[8px] px-2.5 py-1 shadow-2xs">
+                      <Bot className="w-3.5 h-3.5 text-[#d98555] shrink-0" />
+                      <span className="text-[10.5px] font-mono text-slate-500 font-bold hidden sm:inline">Project:</span>
+                      <select
+                        value={selectedProjectId}
+                        onChange={(e) => handleSelectProject(e.target.value)}
+                        className="bg-transparent text-[11.5px] font-mono font-bold text-[#c8764b] focus:outline-none cursor-pointer max-w-[200px] sm:max-w-[290px] truncate"
+                      >
+                        {MACHINERY_PROJECTS.map(proj => (
+                          <option key={proj.id} value={proj.id} className="bg-white text-slate-800 font-mono text-xs">
+                            {proj.name} ({proj.cellLocation.split('•')[0].trim()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
                     <div className="flex items-center gap-2 font-mono text-[10.5px]">
                       {isInvestigating ? (
                         <span className="flex items-center gap-1 text-[#d98555] font-semibold">
-                          <Loader2 className="w-3 h-3 animate-spin" /> Streamline Processing...
+                          <Loader2 className="w-3 h-3 animate-spin" /> Investigating {activeProject?.nodeId}...
                         </span>
                       ) : (
                         <span className="text-emerald-600 font-semibold flex items-center gap-1">
@@ -982,8 +1620,28 @@ export default function App() {
                         <InvestigationReportView
                           report={generatedReport}
                           verdict={verdict}
-                          onApprove={() => handleHumanAction({ action: "APPROVE", engineer_id: "ENG-LEAD", notes: "Approved based on empirical telemetry audit." })}
-                          onOverride={() => handleHumanAction({ action: "OVERRIDE", engineer_id: "ENG-LEAD", notes: "Override manual inspection." })}
+                          selectedProject={activeProject}
+                          isInvestigating={isInvestigating}
+                          onTriggerInvestigation={() => {
+                            handleTriggerScenario(
+                              activeProject.scenarioId,
+                              false,
+                              `Investigate ${activeProject.name} (${activeProject.nodeId}): ${activeProject.incidentTitle}`
+                            );
+                          }}
+                          onLoadVerifiedReport={() => {
+                            if (activeProject.verifiedReport) {
+                              setGeneratedReport(activeProject.verifiedReport);
+                              setVerdict({
+                                status: activeProject.verifiedReport.investigation_results.status,
+                                final_confidence_score: activeProject.verifiedReport.investigation_results.final_confidence_score,
+                                primary_root_cause: activeProject.verifiedReport.root_cause,
+                                critic_report: activeProject.verifiedReport.critic_findings
+                              });
+                            }
+                          }}
+                          onApprove={() => handleHumanAction({ action: "APPROVE", engineer_id: "ENG-LEAD", notes: `Approved grounded empirical audit for ${activeProject.name}.` })}
+                          onOverride={() => handleHumanAction({ action: "OVERRIDE", engineer_id: "ENG-LEAD", notes: `Override manual inspection for ${activeProject.name}.` })}
                         />
                       </div>
                     </div>
@@ -994,7 +1652,81 @@ export default function App() {
                 /* DUAL-SCREEN COLUMN for Incident History & Evidence Inspector */
                 <div className="flex-1 min-w-0 flex flex-col gap-2.5 h-full overflow-hidden">
                   
-                  {/* SCREEN 1: TOP CARD */}
+                  {/* Evidence Inspector Top Command & Machine Project Bar */}
+                  {activeTab === "Evidence Inspector" && (
+                    <div className="shrink-0 flex flex-wrap items-center justify-between px-3 py-1.5 bg-white/95 backdrop-blur-md rounded-[8px] border border-white/80 shadow-2xs gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-1 rounded-[6px] bg-[#faeee5] text-[#c8764b] border border-[#f5cdb6] text-xs font-mono font-bold flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-[#d98555]" />
+                          <span>EVIDENCE & CRITIC AUDIT</span>
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-500 hidden xl:inline">
+                          Raw sensor proof & adversarial physics cross-examination
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Machine Project Selector */}
+                        <div className="flex items-center gap-1.5 bg-[#faf5f0] border border-[#ecd7c7] rounded-[8px] px-2.5 py-1 shadow-2xs">
+                          <Bot className="w-3.5 h-3.5 text-[#d98555] shrink-0" />
+                          <span className="text-[10.5px] font-mono text-slate-500 font-bold hidden sm:inline">Machine:</span>
+                          <select
+                            value={selectedProjectId}
+                            onChange={(e) => handleSelectProject(e.target.value)}
+                            className="bg-transparent text-[11.5px] font-mono font-bold text-[#c8764b] focus:outline-none cursor-pointer max-w-[180px] sm:max-w-[240px] truncate"
+                          >
+                            {MACHINERY_PROJECTS.map(proj => (
+                              <option key={proj.id} value={proj.id} className="bg-white text-slate-800 font-mono text-xs">
+                                {proj.name} ({proj.cellLocation.split('•')[0].trim()})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Audit Sensor Proof Action */}
+                        <button
+                          onClick={() => {
+                            handleTriggerScenario(
+                              activeProject.scenarioId,
+                              false,
+                              `Audit physical evidence and sensor telemetry for ${activeProject.name} (${activeProject.nodeId}): ${activeProject.incidentTitle}`
+                            );
+                          }}
+                          disabled={isInvestigating}
+                          className="px-3 py-1 bg-gradient-to-r from-[#d98555] to-[#e89568] hover:from-[#c8764b] hover:to-[#d98555] text-white rounded-[8px] text-[11px] font-mono font-semibold shadow-2xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          {isInvestigating ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3 h-3" />
+                          )}
+                          <span>{isInvestigating ? "Auditing..." : "Audit Sensor Proof"}</span>
+                        </button>
+
+                        {/* Load Golden Proof Button */}
+                        {activeProject?.verifiedReport && (
+                          <button
+                            onClick={() => {
+                              setGeneratedReport(activeProject.verifiedReport);
+                              setVerdict({
+                                status: activeProject.verifiedReport.investigation_results.status,
+                                final_confidence_score: activeProject.verifiedReport.investigation_results.final_confidence_score,
+                                primary_root_cause: activeProject.verifiedReport.root_cause,
+                                critic_report: activeProject.verifiedReport.critic_findings,
+                                recommended_mitigation: activeProject.verifiedReport.remediation?.procedure
+                              });
+                            }}
+                            className="px-2.5 py-1 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 hover:text-[#c8764b] rounded-[8px] text-[11px] font-mono font-medium shadow-2xs transition flex items-center gap-1 cursor-pointer hidden md:flex"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                            <span>Load Golden Proof</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* SCREEN 1: TOP CARD (Multimodal Telemetry Inspector) */}
                   <div className="flex-1 min-h-0 rounded-[10px] overflow-hidden">
                     {activeTab === "Incident History" ? (
                       <IncidentHistoryView
@@ -1008,13 +1740,15 @@ export default function App() {
                             telemetry={telemetry}
                             hasThermalFault={hasThermalFault}
                             hasAcousticFault={hasAcousticFault}
+                            selectedProject={activeProject}
+                            isInvestigating={isInvestigating}
                           />
                         </div>
                       </div>
                     )}
                   </div>
 
-                  {/* SCREEN 2: BOTTOM CARD */}
+                  {/* SCREEN 2: BOTTOM CARD (Critic Cross-Examination & Human Approval) */}
                   <div className="flex-1 min-h-0 rounded-[10px] overflow-hidden">
                     {activeTab === "Incident History" ? (
                       <InvestigationReplayView
@@ -1023,20 +1757,21 @@ export default function App() {
                         onActionComplete={() => {}}
                       />
                     ) : (
-                      /* Evidence Inspector Bottom Card: Critic Debate View + Human Approval Bar */
                       <div className="h-full w-full bg-white/95 backdrop-blur-md rounded-[10px] p-2.5 border border-white/80 shadow-xs flex flex-col justify-between overflow-hidden gap-2">
                         <div className="flex-1 min-h-0 overflow-y-auto pr-1">
                           <CriticDebateView
                             rootCause={verdict?.primary_root_cause}
                             criticReport={verdict?.critic_report}
                             isInvestigating={isInvestigating}
+                            selectedProject={activeProject}
+                            onTriggerAudit={() => handleTriggerScenario(activeProject.scenarioId, false)}
                           />
                         </div>
                         <div className="shrink-0">
                           <HumanApprovalBar
                             status={status}
-                            confidenceScore={verdict?.final_confidence_score ?? 94}
-                            recommendedMitigation={verdict?.recommended_mitigation}
+                            confidenceScore={verdict?.final_confidence_score ?? (activeProject?.verifiedReport?.investigation_results?.final_confidence_score || 94.2)}
+                            recommendedMitigation={verdict?.recommended_mitigation || activeProject?.verifiedReport?.remediation?.procedure || "Inspect joint wire harness and purge lubricant per ISO-10218"}
                             onAction={handleHumanAction}
                             isProcessing={isInvestigating}
                           />
@@ -1055,7 +1790,7 @@ export default function App() {
                   isInvestigating={isInvestigating}
                   activeAgent={activeAgent}
                   agentTraces={agentTraces}
-                  onTriggerInvestigation={() => handleTriggerScenario(activeScenarioId)}
+                  onTriggerInvestigation={() => handleTriggerScenario(activeScenarioId, activeTab !== "Connected Machinery")}
                   activeScenarioName={activeScenarioId}
                   messages={chatMessages}
                   setMessages={setChatMessages}

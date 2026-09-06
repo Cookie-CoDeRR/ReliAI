@@ -11,23 +11,99 @@ import {
   Sparkles,
   ArrowRight,
   Database,
-  Cpu
+  Cpu,
+  Bot,
+  Zap,
+  Loader2,
+  Play
 } from 'lucide-react';
 
 export default function InvestigationReportView({
   report,
   verdict,
+  selectedProject = null,
+  isInvestigating = false,
+  onTriggerInvestigation = null,
+  onLoadVerifiedReport = null,
   onApprove,
   onOverride
 }) {
   if (!report && !verdict) {
+    if (isInvestigating) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/95 rounded-[10px] border border-[#ecd7c7] shadow-xs">
+          <div className="w-14 h-14 rounded-full bg-[#faeee5] border border-[#f5cdb6] flex items-center justify-center text-[#d98555] mb-3 shadow-sm">
+            <Loader2 className="w-7 h-7 animate-spin" />
+          </div>
+          <h3 className="font-heading text-lg font-bold text-slate-800">
+            Compiling Grounded Investigation Report...
+          </h3>
+          <p className="font-mono text-xs text-[#c8764b] font-semibold mt-1">
+            Target: {selectedProject?.name || "KUKA KR-210 R2700"} ({selectedProject?.nodeId || "HARNESS-A4"})
+          </p>
+          <p className="font-mono text-[11px] text-slate-500 max-w-md mt-2 leading-relaxed">
+            Aggregating 6-axis joint kinematics, vibration FFT spectrum harmonics, and running multi-agent critic cross-examination against {selectedProject?.isoStandard || "ISO specifications"}.
+          </p>
+        </div>
+      );
+    }
+
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-white/90 rounded-[10px] border border-slate-200/80">
-        <FileText className="w-12 h-12 text-slate-300 mb-3 animate-pulse" />
-        <h3 className="font-heading text-lg font-bold text-slate-700">Compiling Investigation Report...</h3>
-        <p className="font-mono text-xs text-slate-500 max-w-sm mt-1">
-          Aggregating telemetry anomalies, critic debate arguments, and golden spec baseline deviations.
+      <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-8 text-center bg-white/95 rounded-[10px] border border-slate-200/80 shadow-xs">
+        <div className="w-12 h-12 rounded-[10px] bg-[#faeee5] border border-[#f5cdb6] flex items-center justify-center text-[#d98555] mb-3 shadow-2xs">
+          <FileText className="w-6 h-6 text-[#d98555]" />
+        </div>
+        <span className="font-mono text-[10px] uppercase font-bold text-[#c8764b] bg-[#faeee5] px-2.5 py-0.5 rounded-full border border-[#f5cdb6] mb-2">
+          Project Audit Dossier
+        </span>
+        <h3 className="font-heading text-lg sm:text-xl font-bold text-slate-800 tracking-tight">
+          {selectedProject ? selectedProject.name : "Select Machinery Project"}
+        </h3>
+        <p className="font-mono text-xs text-slate-600 max-w-md mt-1.5 leading-relaxed">
+          {selectedProject?.incidentTitle || "Choose a manufacturing cell project above to target empirical telemetry audits."}
         </p>
+
+        {selectedProject && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 my-4 w-full max-w-md text-left font-mono text-[10.5px]">
+            <div className="p-2 bg-slate-50 rounded-[6px] border border-slate-100">
+              <span className="text-slate-400 block text-[9px] uppercase">Node & Bus</span>
+              <strong className="text-slate-700">{selectedProject.nodeId}</strong>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-[6px] border border-slate-100">
+              <span className="text-slate-400 block text-[9px] uppercase">Cell Location</span>
+              <strong className="text-slate-700">{selectedProject.cellLocation.split('•')[0].trim()}</strong>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-[6px] border border-slate-100 col-span-2 sm:col-span-1">
+              <span className="text-slate-400 block text-[9px] uppercase">Standard</span>
+              <strong className="text-slate-700 truncate block">{selectedProject.isoStandard}</strong>
+            </div>
+          </div>
+        )}
+
+        <p className="font-mono text-[10px] text-slate-400 max-w-sm mb-4">
+          All reports are mathematically grounded on high-frequency sensor readings, preventing generic or hallucinated LLM outputs.
+        </p>
+
+        <div className="flex items-center gap-2.5 flex-wrap justify-center">
+          {onLoadVerifiedReport && (
+            <button
+              onClick={onLoadVerifiedReport}
+              className="px-4 py-2 rounded-[8px] bg-gradient-to-r from-[#d98555] to-[#c8764b] hover:from-[#c8764b] hover:to-[#b7653b] text-white font-mono text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm hover:shadow"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Generate Grounded Audit Report</span>
+            </button>
+          )}
+          {onTriggerInvestigation && (
+            <button
+              onClick={onTriggerInvestigation}
+              className="px-3.5 py-2 rounded-[8px] bg-slate-100 hover:bg-[#faeee5] hover:text-[#c8764b] text-slate-700 font-mono text-xs font-semibold border border-slate-200/80 transition cursor-pointer flex items-center gap-1.5"
+            >
+              <Zap className="w-3.5 h-3.5 text-[#d98555]" />
+              <span>Run Multi-Agent Deliberation</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -69,7 +145,7 @@ export default function InvestigationReportView({
             <FileText className="w-5 h-5 text-[#d98555]" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-white/10 text-slate-300 font-bold uppercase tracking-wider">
                 {rpt.report_id || `RPT-${sum.incident_id || 'INC-2026'}`}
               </span>
@@ -78,6 +154,13 @@ export default function InvestigationReportView({
               }`}>
                 {isConclusive ? 'CONCLUSIVE AUDIT' : 'NEEDS VERIFICATION'}
               </span>
+              {selectedProject && (
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-[#d98555]/30 text-[#f5cdb6] font-semibold border border-[#d98555]/40 flex items-center gap-1">
+                  <Bot className="w-3 h-3 text-[#f5cdb6]" />
+                  <span>{selectedProject.name}</span>
+                  <span className="text-white/60">({selectedProject.nodeId})</span>
+                </span>
+              )}
             </div>
             <h2 className="font-heading text-base sm:text-lg font-bold text-white mt-1">
               {sum.title || root?.title || 'Industrial Anomaly Investigation Report'}
