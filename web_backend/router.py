@@ -7,6 +7,8 @@ from web_backend.database import get_db
 from web_backend.service import IncidentService
 from web_backend.services.tool_service import ToolAccessService
 from web_backend.services.system_service import SystemService, SystemStatusResponse
+from web_backend.services.evidence_service import EvidenceService
+from web_backend.services.report_service import ReportService
 from harness.schemas import MultimodalTelemetrySnapshot, HumanApprovalAction
 from harness.orchestrator import InvestigationOrchestrator
 
@@ -301,3 +303,35 @@ async def search_documents(
 ):
     """Searches industrial SOPs, golden specs, and scenario benchmark files."""
     return await _tool_access_service.search_documents(query=query, limit=limit)
+
+
+# =============================================================================
+# KUSHAGRA BACKEND VERTICAL — PHASE 2: EVIDENCE & REPORT APIs
+# =============================================================================
+
+_evidence_service = EvidenceService()
+_report_service = ReportService(evidence_service=_evidence_service)
+
+
+@router.get("/incidents/{incident_id}/evidence", tags=["Evidence Service"])
+async def get_incident_evidence(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieves empirical normalized evidence items collected for an incident."""
+    try:
+        return await _evidence_service.get_incident_evidence(db=db, incident_id=incident_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/incidents/{incident_id}/report", tags=["Report Service"])
+async def get_incident_report(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieves/compiles the structured investigation report for an existing incident."""
+    try:
+        return await _report_service.generate_report(db=db, incident_id=incident_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
