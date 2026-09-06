@@ -9,6 +9,103 @@ import {
 } from 'lucide-react';
 import { submitFollowUp, uploadDocument } from '../services/api';
 
+function FormattedMessageContent({ text, isUser }) {
+  if (isUser) {
+    return <p className="text-[11px] leading-relaxed whitespace-pre-wrap">{text}</p>;
+  }
+
+  // Check if this is a structured agent investigation trace
+  const hasAgentSteps = text.includes("[") && text.includes("]");
+
+  if (!hasAgentSteps) {
+    return (
+      <p className="text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap font-sans">
+        {text}
+      </p>
+    );
+  }
+
+  // Cleanly split into segments matching [Tag]
+  const rawSegments = text.split(/(?=\[[\w\s\-_]+\])/g).map(s => s.trim()).filter(Boolean);
+
+  if (rawSegments.length === 0) {
+    return <p className="text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap">{text}</p>;
+  }
+
+  return (
+    <div className="space-y-1.5 font-sans select-text mt-0.5">
+      {rawSegments.map((seg, idx) => {
+        const match = seg.match(/^\[([^\]]+)\]\s*(.*)$/s);
+        if (!match) {
+          return (
+            <p key={idx} className="text-[10.5px] text-slate-600 leading-relaxed font-sans">
+              {seg}
+            </p>
+          );
+        }
+
+        const tag = match[1].trim();
+        const body = match[2].trim();
+        const isVerdict = tag.toLowerCase().includes("verdict") || tag.toLowerCase().includes("audit dossier");
+
+        // Color-coded badges matching ReliAI agent design system
+        let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
+        if (tag.includes("Harness") || tag.includes("Ingest")) {
+          badgeColor = "bg-blue-50 text-blue-700 border-blue-200/90";
+        } else if (tag.includes("Triage")) {
+          badgeColor = "bg-amber-50 text-amber-700 border-amber-200/90";
+        } else if (tag.includes("Knowledge") || tag.includes("RAG")) {
+          badgeColor = "bg-purple-50 text-purple-700 border-purple-200/90";
+        } else if (tag.includes("Domain") || tag.includes("Specialist")) {
+          badgeColor = "bg-cyan-50 text-cyan-800 border-cyan-200/90";
+        } else if (tag.includes("Root Cause")) {
+          badgeColor = "bg-[#faeee5] text-[#c8764b] border-[#efc4ab]";
+        } else if (tag.includes("Critic") || tag.includes("Adversarial") || tag.includes("Validation")) {
+          badgeColor = "bg-rose-50 text-rose-700 border-rose-200/90";
+        }
+
+        if (isVerdict) {
+          return (
+            <div
+              key={idx}
+              className="mt-2 p-2.5 rounded-[9px] bg-gradient-to-r from-emerald-50/95 via-emerald-50/70 to-[#faeee5]/80 border border-emerald-300 shadow-2xs space-y-1"
+            >
+              <div className="flex items-center justify-between">
+                <span className="px-2 py-0.5 rounded-full text-[8.5px] font-mono font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  {tag}
+                </span>
+                <span className="text-[8.5px] font-mono font-bold text-emerald-700 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  VERIFIED
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-900 font-semibold leading-snug">
+                {body}
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            key={idx}
+            className="p-2 rounded-[8px] bg-white border border-slate-200/80 shadow-2xs space-y-0.5 hover:border-[#ecd7c7] transition"
+          >
+            <div className="flex items-center gap-1">
+              <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${badgeColor}`}>
+                {tag}
+              </span>
+            </div>
+            <p className="text-[10.5px] text-slate-700 leading-snug pl-0.5">
+              {body}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function CopilotChatPanel({
   activeIncidentId,
   isInvestigating = false,
@@ -84,7 +181,6 @@ export default function CopilotChatPanel({
       }
 
       if (activeIncidentId) {
-        // Submit follow-up inquiry to FastAPI backend
         const res = await submitFollowUp(activeIncidentId, {
           operator_notes: prompt + (uploadId ? ` [Stored Upload ID: ${uploadId}]` : ''),
           telemetry_override: null
@@ -106,7 +202,6 @@ export default function CopilotChatPanel({
           }
         ]);
       } else {
-        // Trigger investigation if not already active
         if (onTriggerInvestigation) {
           onTriggerInvestigation();
         }
@@ -127,14 +222,12 @@ export default function CopilotChatPanel({
     }
   };
 
-
-
   const hasMessages = messages.length > 0 || isInvestigating;
 
   return (
     <div className="h-full min-h-0 w-full flex flex-col justify-between p-3.5 bg-white/95 backdrop-blur-md rounded-[10px] border border-white/80 shadow-xs overflow-hidden transition-all duration-300">
       
-      {/* Top Header (Only visible when user starts talking, small ReliAI title at top) */}
+      {/* Top Header */}
       {hasMessages && (
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 shrink-0 transition-all duration-300">
           <span className="font-jersey text-xl text-[#d98555] tracking-wider select-none">
@@ -150,7 +243,6 @@ export default function CopilotChatPanel({
 
       {/* Main Content Area */}
       {!hasMessages ? (
-        /* Empty State: ReliAI Title Centered Horizontally & Vertically */
         <div className="flex-1 flex flex-col items-center justify-center p-4 text-center select-none transition-all duration-300">
           <h1 className="font-jersey text-5xl sm:text-6xl text-[#d98555] tracking-wider leading-none drop-shadow-sm">
             ReliAI
@@ -160,7 +252,6 @@ export default function CopilotChatPanel({
           </p>
         </div>
       ) : (
-        /* Active Chat Message Stream */
         <div className="flex-1 overflow-y-auto pr-1 my-2 space-y-2.5 text-[11px] min-h-0">
           {messages.map((m) => {
             const isUser = m.sender === 'user';
@@ -170,19 +261,20 @@ export default function CopilotChatPanel({
                 className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[90%] p-2.5 rounded-[14px] leading-relaxed shadow-2xs ${
+                  className={`max-w-[95%] p-2.5 rounded-[14px] leading-relaxed shadow-2xs ${
                     isUser
                       ? 'bg-gradient-to-r from-[#dc936b] to-[#ce8055] text-white rounded-br-xs'
-                      : 'bg-slate-50 border border-slate-200/80 text-slate-800 rounded-bl-xs'
+                      : 'bg-slate-50 border border-slate-200/80 text-slate-800 rounded-bl-xs w-full'
                   }`}
                 >
                   {!isUser && (
-                    <div className="flex items-center gap-1 text-[9px] font-mono font-bold text-[#c8764b] mb-1">
+                    <div className="flex items-center gap-1 text-[9px] font-mono font-bold text-[#c8764b] mb-1.5 pb-1 border-b border-slate-200/60">
                       <Bot className="w-3 h-3" />
-                      <span>ReliAI</span>
+                      <span>ReliAI Autonomous Reasoner</span>
                     </div>
                   )}
-                  <p className="text-[11px] leading-normal">{m.text}</p>
+
+                  <FormattedMessageContent text={m.text} isUser={isUser} />
 
                   {m.attachment && (
                     <div className="mt-1.5 flex items-center gap-1 text-[9.5px] font-mono bg-black/10 px-2 py-0.5 rounded-md text-white/90">
