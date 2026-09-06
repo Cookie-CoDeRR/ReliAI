@@ -8,3 +8,5 @@ aiosqlite>=0.20.0
 greenlet>=3.0.0
 pytest>=8.3.0
 pytest-asyncio>=0.24.0
+python-multipart==0.0.32
+pypdf==6.17.0

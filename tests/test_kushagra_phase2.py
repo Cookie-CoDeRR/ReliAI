@@ -41,7 +41,7 @@ async def test_evidence_service_unit_methods():
         # 2. Test document evidence retrieval
         doc_evidence = await evidence_service.get_document_evidence(query="Harmonic")
         assert len(doc_evidence) >= 1
-        assert doc_evidence[0]["evidence_type"] == "DOCUMENT"
+        assert doc_evidence[0]["evidence_type"] in ["SOP", "SPECIFICATION", "DOCUMENT"]
 
 
 @pytest.mark.asyncio

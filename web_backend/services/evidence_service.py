@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from web_backend.models import IncidentRecord
+from web_backend.models import IncidentRecord, UploadRecord
 from harness.schemas import MultimodalTelemetrySnapshot, EvidenceItem
 from harness.baseline_engine import BaselineEngine
 from web_backend.services.tool_service import ToolAccessService
@@ -159,16 +159,16 @@ class EvidenceService:
             })
         return evidence
 
-    async def get_document_evidence(self, query: str) -> List[Dict[str, Any]]:
+    async def get_document_evidence(self, query: str, db: Optional[AsyncSession] = None) -> List[Dict[str, Any]]:
         """
         Retrieves industrial document search results formatted as evidence references.
         """
-        doc_data = await self.tool_service.search_documents(query=query, limit=10)
+        doc_data = await self.tool_service.search_documents(query=query, limit=10, db=db)
         docs = []
         for i, doc in enumerate(doc_data.get("documents", [])):
             docs.append({
                 "evidence_id": f"EVD-DOC-{i+1:03d}",
-                "evidence_type": "DOCUMENT",
+                "evidence_type": doc.get("doc_type", "DOCUMENT"),
                 "source": f"{doc.get('doc_type')}:{doc.get('id')}",
                 "observation": f"Document '{doc.get('title')}': {doc.get('content_snippet')}",
                 "is_abnormal": False,
@@ -196,6 +196,22 @@ class EvidenceService:
             domain=incident.domain if incident else None
         )
 
+        # Uploaded document/file evidence for this incident
+        upl_res = await db.execute(select(UploadRecord).where(UploadRecord.incident_id == incident_id))
+        uploaded_files = list(upl_res.scalars().all())
+        uploaded_evd = [
+            {
+                "evidence_id": f"EVD-UPL-{u.id}",
+                "evidence_type": f"UPLOADED_{u.file_type}",
+                "source": f"UploadRecord:{u.id}:{u.original_filename}",
+                "observation": f"Uploaded {u.file_type} '{u.original_filename}' ({u.file_size_bytes} bytes): {(u.extracted_text[:150] + '...') if u.extracted_text else 'Parsed metadata available'}",
+                "is_abnormal": u.ingestion_status == "FAILED",
+                "severity": "CRITICAL" if u.ingestion_status == "FAILED" else "NOMINAL",
+                "incident_id": u.incident_id
+            }
+            for u in uploaded_files
+        ]
+
         return {
             "incident_id": incident_id,
             "station_id": incident.station_id if incident else None,
@@ -203,5 +219,6 @@ class EvidenceService:
             "log_evidence": log_evd,
             "maintenance_evidence": maint_evd,
             "similar_incident_evidence": sim_evd,
-            "total_evidence_count": len(inc_evd.get("evidence", [])) + len(log_evd) + len(maint_evd) + len(sim_evd)
+            "uploaded_file_evidence": uploaded_evd,
+            "total_evidence_count": len(inc_evd.get("evidence", [])) + len(log_evd) + len(maint_evd) + len(sim_evd) + len(uploaded_evd)
         }

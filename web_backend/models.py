@@ -31,6 +31,7 @@ class IncidentRecord(Base):
     # Relationships
     agent_traces = relationship("AgentTraceRecord", back_populates="incident", cascade="all, delete-orphan")
     approval_audits = relationship("ApprovalAuditRecord", back_populates="incident", cascade="all, delete-orphan")
+    uploads = relationship("UploadRecord", back_populates="incident", cascade="all, delete-orphan")
 
 
 class AgentTraceRecord(Base):
@@ -58,3 +59,23 @@ class ApprovalAuditRecord(Base):
     timestamp = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc))
 
     incident = relationship("IncidentRecord", back_populates="approval_audits")
+
+
+class UploadRecord(Base):
+    __tablename__ = "uploads"
+
+    id = Column(String(50), primary_key=True, index=True)
+    original_filename = Column(String(255), nullable=False)
+    stored_filename = Column(String(255), nullable=False)
+    relative_path = Column(String(512), nullable=False)
+    mime_type = Column(String(100), nullable=False)
+    file_size_bytes = Column(Integer, nullable=False)
+    file_type = Column(String(20), nullable=False, index=True)  # PDF | CSV | TXT | LOG | IMAGE
+    incident_id = Column(String(50), ForeignKey("incidents.id", ondelete="SET NULL"), nullable=True, index=True)
+    ingestion_status = Column(String(50), default="PARSED", index=True)  # PARSED | FAILED
+    extracted_text = Column(Text, nullable=True)
+    parsed_metadata_json = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
+
+    incident = relationship("IncidentRecord", back_populates="uploads")

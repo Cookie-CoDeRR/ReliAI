@@ -1,6 +1,7 @@
 import re
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
@@ -9,6 +10,7 @@ from web_backend.services.tool_service import ToolAccessService
 from web_backend.services.system_service import SystemService, SystemStatusResponse
 from web_backend.services.evidence_service import EvidenceService
 from web_backend.services.report_service import ReportService
+from web_backend.services.upload_service import UploadService
 from harness.schemas import MultimodalTelemetrySnapshot, HumanApprovalAction
 from harness.orchestrator import InvestigationOrchestrator
 
@@ -335,3 +337,140 @@ async def get_incident_report(
         return await _report_service.generate_report(db=db, incident_id=incident_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# =============================================================================
+# KUSHAGRA BACKEND VERTICAL — PHASE 3: UPLOAD & INGESTION APIs
+# =============================================================================
+
+_upload_service = UploadService()
+
+
+@router.post("/uploads", tags=["Upload & Ingestion Subsystem"])
+async def upload_file(
+    file: UploadFile = File(...),
+    incident_id: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Ingests and parses uploaded PDF, CSV, TXT, LOG, PNG, or JPEG files.
+    Enforces maximum size limit (10MB), filename sanitization, and path containment.
+    """
+    try:
+        content = await file.read()
+        record = await _upload_service.create_upload(
+            db=db,
+            file_bytes=content,
+            original_filename=file.filename or "upload.bin",
+            mime_type=file.content_type or "application/octet-stream",
+            incident_id=incident_id
+        )
+        return {
+            "status": "UPLOADED",
+            "upload_id": record.id,
+            "original_filename": record.original_filename,
+            "file_type": record.file_type,
+            "file_size_bytes": record.file_size_bytes,
+            "incident_id": record.incident_id,
+            "ingestion_status": record.ingestion_status,
+            "created_at": record.created_at.isoformat() if record.created_at else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload processing failed: {str(e)}")
+
+
+@router.get("/uploads", tags=["Upload & Ingestion Subsystem"])
+async def list_uploads(
+    incident_id: Optional[str] = Query(None),
+    file_type: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db)
+):
+    """Lists stored file uploads with optional filtering by incident ID or file type."""
+    records = await _upload_service.list_uploads(
+        db=db,
+        incident_id=incident_id,
+        file_type=file_type,
+        limit=limit,
+        offset=offset
+    )
+    return [
+        {
+            "id": r.id,
+            "original_filename": r.original_filename,
+            "file_type": r.file_type,
+            "mime_type": r.mime_type,
+            "file_size_bytes": r.file_size_bytes,
+            "incident_id": r.incident_id,
+            "ingestion_status": r.ingestion_status,
+            "created_at": r.created_at.isoformat() if r.created_at else None
+        }
+        for r in records
+    ]
+
+
+@router.get("/uploads/{upload_id}", tags=["Upload & Ingestion Subsystem"])
+async def get_upload_metadata(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieves full upload record dossier including extracted text and parsed metadata."""
+    record = await _upload_service.get_upload_record(db=db, upload_id=upload_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Upload '{upload_id}' not found")
+
+    return {
+        "id": record.id,
+        "original_filename": record.original_filename,
+        "file_type": record.file_type,
+        "mime_type": record.mime_type,
+        "file_size_bytes": record.file_size_bytes,
+        "incident_id": record.incident_id,
+        "ingestion_status": record.ingestion_status,
+        "extracted_text": record.extracted_text,
+        "parsed_metadata": record.parsed_metadata_json,
+        "error_message": record.error_message,
+        "created_at": record.created_at.isoformat() if record.created_at else None
+    }
+
+
+@router.get("/uploads/{upload_id}/file", tags=["Upload & Ingestion Subsystem"])
+async def download_upload_file(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Serves the raw physical file safely after asserting path containment."""
+    record = await _upload_service.get_upload_record(db=db, upload_id=upload_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Upload '{upload_id}' not found")
+
+    try:
+        physical_path = _upload_service.get_physical_file_path(record)
+        if not physical_path.exists():
+            raise HTTPException(status_code=404, detail="Stored file missing from disk storage")
+        return FileResponse(
+            path=str(physical_path),
+            filename=record.original_filename,
+            media_type=record.mime_type
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.delete("/uploads/{upload_id}", tags=["Upload & Ingestion Subsystem"])
+async def delete_upload(
+    upload_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """Deletes uploaded file from storage directory and removes UploadRecord from DB."""
+    success = await _upload_service.delete_upload(db=db, upload_id=upload_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Upload '{upload_id}' not found")
+
+    return {
+        "status": "DELETED",
+        "upload_id": upload_id
+    }

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc, or_
-from web_backend.models import IncidentRecord, AgentTraceRecord, ApprovalAuditRecord
+from web_backend.models import IncidentRecord, AgentTraceRecord, ApprovalAuditRecord, UploadRecord
 from harness.baseline_engine import BaselineEngine
 
 
@@ -240,10 +240,11 @@ class ToolAccessService:
     async def search_documents(
         self,
         query: str,
-        limit: int = 10
+        limit: int = 10,
+        db: Optional[AsyncSession] = None
     ) -> Dict[str, Any]:
         """
-        Searches available SOPs, baseline specs, and scenario documents.
+        Searches available SOPs, baseline specs, scenario documents, and uploaded files.
         """
         results = []
         q_lower = query.lower()
@@ -270,6 +271,26 @@ class ToolAccessService:
                 "component": "STATION_GLOBAL",
                 "content_snippet": "Active engineering limits for thermal, kinematic, pneumatic, and acoustic sensors."
             })
+
+        # 3. Search Uploaded Files in DB if AsyncSession provided
+        if db:
+            pattern = f"%{query}%"
+            stmt = select(UploadRecord).where(
+                or_(
+                    UploadRecord.original_filename.ilike(pattern),
+                    UploadRecord.extracted_text.ilike(pattern)
+                )
+            ).limit(limit)
+            db_res = await db.execute(stmt)
+            for upl in db_res.scalars().all():
+                snippet = (upl.extracted_text[:150] + "...") if upl.extracted_text else f"Uploaded {upl.file_type} document"
+                results.append({
+                    "doc_type": f"UPLOADED_{upl.file_type}",
+                    "id": upl.id,
+                    "title": upl.original_filename,
+                    "component": f"INCIDENT_{upl.incident_id}" if upl.incident_id else "GLOBAL",
+                    "content_snippet": snippet
+                })
 
         return {
             "status": "SUCCESS",
