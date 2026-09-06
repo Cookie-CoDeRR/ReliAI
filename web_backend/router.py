@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
 from web_backend.service import IncidentService
+from web_backend.services.tool_service import ToolAccessService
+from web_backend.services.system_service import SystemService, SystemStatusResponse
 from harness.schemas import MultimodalTelemetrySnapshot, HumanApprovalAction
 from harness.orchestrator import InvestigationOrchestrator
 
@@ -33,6 +35,14 @@ class ApprovalRequest(BaseModel):
     action: str  # APPROVE | OVERRIDE | DISPATCH_TECH
     engineer_id: str
     notes: Optional[str] = None
+
+
+class SearchLogsRequest(BaseModel):
+    query: Optional[str] = None
+    incident_id: Optional[str] = None
+    agent_name: Optional[str] = None
+    limit: int = 50
+    offset: int = 0
 
 
 @router.get("/scenarios")
@@ -190,3 +200,104 @@ async def approve_incident(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# =============================================================================
+# KUSHAGRA BACKEND VERTICAL — PHASE 1: SYSTEM STATUS & TOOL ACCESS APIs
+# =============================================================================
+
+_tool_access_service = ToolAccessService()
+
+
+@router.get("/system/status", response_model=SystemStatusResponse, tags=["System Services"])
+async def get_system_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Returns live operational status across Database, Ollama LLM, Storage, and Tool Access Layer.
+    Exposes zero secrets, credentials, or internal filesystem paths.
+    """
+    return await SystemService.get_system_status(db=db, ollama_client=orchestrator.client)
+
+
+@router.get("/tools/available", tags=["Tool Access Layer"])
+async def list_available_tools():
+    """Returns directory of registered data retrieval and analysis tools."""
+    return _tool_access_service.get_available_tools()
+
+
+@router.post("/tools/search-logs", tags=["Tool Access Layer"])
+async def search_logs(
+    req: SearchLogsRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Searches agent traces and system log entries in DB."""
+    return await _tool_access_service.search_logs(
+        db=db,
+        query=req.query,
+        incident_id=req.incident_id,
+        agent_name=req.agent_name,
+        limit=req.limit,
+        offset=req.offset
+    )
+
+
+@router.get("/tools/maintenance-history", tags=["Tool Access Layer"])
+async def get_maintenance_history(
+    component: Optional[str] = Query(None, description="Filter SOPs by component name"),
+    incident_id: Optional[str] = Query(None, description="Filter audit logs by incident ID"),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieves maintenance SOP procedures and human dispatch audit records."""
+    return await _tool_access_service.get_maintenance_history(
+        db=db,
+        component=component,
+        incident_id=incident_id,
+        limit=limit
+    )
+
+
+@router.get("/tools/similar-incidents", tags=["Tool Access Layer"])
+async def find_similar_incidents(
+    station_id: Optional[str] = Query(None),
+    domain: Optional[str] = Query(None),
+    severity: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    limit: int = Query(10, ge=1, le=50),
+    db: AsyncSession = Depends(get_db)
+):
+    """Queries historical failure incidents by station, domain, severity, or keyword."""
+    return await _tool_access_service.find_similar_incidents(
+        db=db,
+        station_id=station_id,
+        domain=domain,
+        severity=severity,
+        search=search,
+        limit=limit
+    )
+
+
+@router.get("/tools/sensor-data", tags=["Tool Access Layer"])
+async def get_sensor_data(
+    incident_id: Optional[str] = Query(None),
+    station_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retrieves raw sensor telemetry snapshot for an incident or station."""
+    return await _tool_access_service.get_sensor_data(
+        db=db,
+        incident_id=incident_id,
+        station_id=station_id
+    )
+
+
+@router.get("/tools/search-documents", tags=["Tool Access Layer"])
+async def search_documents(
+    query: str = Query(..., min_length=1, description="Keyword query to search across industrial SOPs and specs"),
+    limit: int = Query(10, ge=1, le=50)
+):
+    """Searches industrial SOPs, golden specs, and scenario benchmark files."""
+    return await _tool_access_service.search_documents(query=query, limit=limit)
