@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 
 /**
  * Custom React hook for consuming POST-based Server-Sent Events (SSE)
- * from /harness/investigate/stream.
+ * from /api/v1/scenarios/{scenario_id}/stream or /harness/investigate/stream.
  * 
  * Uses browser-native fetch() + ReadableStream + TextDecoder with AbortController cancellation.
  */
@@ -32,7 +32,7 @@ export function useInvestigationStream() {
     };
   }, []);
 
-  const startStream = useCallback(async (snapshot, incidentId = null) => {
+  const startStream = useCallback(async (scenarioIdOrSnapshot, incidentId = null) => {
     // Abort any previously running stream
     abortStream();
 
@@ -46,16 +46,33 @@ export function useInvestigationStream() {
     setFinalVerdict(null);
 
     try {
-      const queryParam = incidentId ? `?incident_id=${encodeURIComponent(incidentId)}` : '';
-      const response = await fetch(`/harness/investigate/stream${queryParam}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
-        body: JSON.stringify(snapshot),
-        signal: controller.signal
-      });
+      let url;
+      let options;
+
+      if (typeof scenarioIdOrSnapshot === 'string') {
+        url = `/api/v1/scenarios/${encodeURIComponent(scenarioIdOrSnapshot)}/stream`;
+        options = {
+          method: 'POST',
+          headers: {
+            'Accept': 'text/event-stream'
+          },
+          signal: controller.signal
+        };
+      } else {
+        const queryParam = incidentId ? `?incident_id=${encodeURIComponent(incidentId)}` : '';
+        url = `/harness/investigate/stream${queryParam}`;
+        options = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'text/event-stream'
+          },
+          body: JSON.stringify(scenarioIdOrSnapshot),
+          signal: controller.signal
+        };
+      }
+
+      const response = await fetch(url, options);
 
       if (!response.ok) {
         const errText = await response.text();
@@ -99,7 +116,6 @@ export function useInvestigationStream() {
           const rawData = dataLines.join('\n');
 
           if (eventName === 'complete') {
-            // Stream complete event
             setIsStreaming(false);
             setActiveAgent(null);
           } else if (eventName === 'error') {
@@ -117,7 +133,6 @@ export function useInvestigationStream() {
             try {
               const eventObj = JSON.parse(rawData);
 
-              // Update trace log state
               setAgentTraces((prevTraces) => {
                 const normalized = {
                   agent: eventObj.agent || 'UNKNOWN',
@@ -130,41 +145,17 @@ export function useInvestigationStream() {
                 return [...prevTraces, normalized];
               });
 
-              // Track active agent
               if (eventObj.step === 'STARTED' && eventObj.agent) {
                 setActiveAgent(eventObj.agent);
               }
 
-              // Capture final verdict if present
               if (eventObj.step === 'FINAL_VERDICT' && eventObj.verdict) {
                 setFinalVerdict(eventObj.verdict);
               }
             } catch (jsonErr) {
-              console.warn("Malformed JSON in SSE data line:", rawData, jsonErr);
+              console.warn('Malformed JSON in SSE data line:', rawData, jsonErr);
             }
           }
-        }
-      }
-
-      // Process any residual data in buffer after stream EOF
-      if (buffer.trim()) {
-        try {
-          const lines = buffer.split(/\r?\n/);
-          let dataLines = [];
-          for (const line of lines) {
-            if (line.startsWith('data:')) {
-              dataLines.push(line.slice(5).trim());
-            }
-          }
-          const rawData = dataLines.join('\n');
-          if (rawData) {
-            const eventObj = JSON.parse(rawData);
-            if (eventObj.step === 'FINAL_VERDICT' && eventObj.verdict) {
-              setFinalVerdict(eventObj.verdict);
-            }
-          }
-        } catch {
-          // Ignore residual parse failures
         }
       }
 
@@ -173,11 +164,10 @@ export function useInvestigationStream() {
 
     } catch (err) {
       if (err.name === 'AbortError') {
-        // Stream aborted intentionally by user or unmount
         return;
       }
-      console.error("Error reading investigation SSE stream:", err);
-      setError(err.message || "Investigation streaming failed");
+      console.error('Error reading investigation SSE stream:', err);
+      setError(err.message || 'Investigation streaming failed');
       setIsStreaming(false);
       setActiveAgent(null);
     } finally {

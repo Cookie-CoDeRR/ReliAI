@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Search, Filter, Clock, ChevronRight, CheckCircle2, AlertTriangle, XCircle, Wrench, Shield, RefreshCw } from 'lucide-react';
+import { fetchIncidents as apiFetchIncidents, fetchIncidentDetails } from '../services/api.js';
 
 export default function IncidentHistoryDrawer({ isOpen, onClose, onSelectIncident }) {
   const [incidents, setIncidents] = useState([]);
@@ -23,16 +24,12 @@ export default function IncidentHistoryDrawer({ isOpen, onClose, onSelectInciden
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.append('status', statusFilter);
-      if (severityFilter) params.append('severity', severityFilter);
-      if (searchTerm.trim()) params.append('search', searchTerm.trim());
+      const params = {};
+      if (statusFilter) params.status = statusFilter;
+      if (severityFilter) params.severity = severityFilter;
+      if (searchTerm.trim()) params.search = searchTerm.trim();
 
-      const res = await fetch(`/api/v1/incidents?${params.toString()}`);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch incidents: ${res.statusText}`);
-      }
-      const data = await res.json();
+      const data = await apiFetchIncidents(params);
       setIncidents(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Error loading incident history:", err);
@@ -45,11 +42,7 @@ export default function IncidentHistoryDrawer({ isOpen, onClose, onSelectInciden
   const handleSelect = async (incidentId) => {
     setFetchingDetailId(incidentId);
     try {
-      const res = await fetch(`/api/v1/incidents/${encodeURIComponent(incidentId)}`);
-      if (!res.ok) {
-        throw new Error(`Failed to fetch incident details: ${res.statusText}`);
-      }
-      const detail = await res.json();
+      const detail = await fetchIncidentDetails(incidentId);
       setSelectedId(incidentId);
       onSelectIncident(detail);
       onClose();

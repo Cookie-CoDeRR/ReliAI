@@ -10,7 +10,7 @@ class IncidentRecord(Base):
     id = Column(String(50), primary_key=True, index=True)
     station_id = Column(String(50), nullable=False, index=True)
     title = Column(String(255), nullable=False)
-    severity = Column(String(20), default="HIGH")
+    severity = Column(String(20), default="HIGH", index=True)   # indexed for filter queries
     status = Column(String(50), default="DETECTED", index=True)
     created_at = Column(DateTime, default=lambda: datetime.datetime.now(datetime.timezone.utc), index=True)
 

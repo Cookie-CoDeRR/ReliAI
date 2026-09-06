@@ -90,10 +90,22 @@ class ConfidenceEngine:
 
         status = InvestigationStatus.CONCLUSIVE if final_confidence >= self.conclusive_threshold else InvestigationStatus.INVESTIGATING
 
-        # Recommend corrective action from top matched SOP if available
-        if matched_sops and "corrective_actions" in matched_sops[0]:
-            mitigation_actions = "; ".join(matched_sops[0]["corrective_actions"])
-            mitigation = f"Approved SOP ({matched_sops[0]['sop_id']}): {mitigation_actions}"
+        # Recommend corrective action from top matched SOP aligned with primary root cause
+        selected_sop = None
+        if hypothesis and matched_sops:
+            h_text = f"{hypothesis.title} {hypothesis.affected_component} {hypothesis.description}".lower()
+            for s in matched_sops:
+                s_text = f"{s.get('title', '')} {s.get('component', '')} {s.get('causal_mechanism', '')}".lower()
+                keywords = ("thermal", "overheat", "lubricat", "nozzle", "pneumatic", "voltage", "conveyor", "resolver", "bearing", "solenoid")
+                if any(k in h_text and k in s_text for k in keywords):
+                    selected_sop = s
+                    break
+        if not selected_sop and matched_sops:
+            selected_sop = matched_sops[0]
+
+        if selected_sop and "corrective_actions" in selected_sop:
+            mitigation_actions = "; ".join(selected_sop["corrective_actions"])
+            mitigation = f"Approved SOP ({selected_sop['sop_id']}): {mitigation_actions}"
         else:
             mitigation = f"Inspect and service {hypothesis.affected_component if hypothesis else 'station'}. Verify sensor calibration."
 

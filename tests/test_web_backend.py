@@ -163,3 +163,4 @@ async def test_incident_list_filtering_and_search():
         page2_list = page2_res.json()
         assert len(page2_list) == 1
         assert page1_list[0]["id"] != page2_list[0]["id"]
+

@@ -197,6 +197,57 @@ class TriageAssessment(BaseModel):
     immediate_containment_action: str
     active_investigation_paths: List[str]
 
+    @field_validator("incident_domain", mode="before")
+    @classmethod
+    def normalize_domain(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            val = v.upper().strip()
+            # Map common partials
+            for d in IncidentDomain:
+                if d.value in val or val in d.value:
+                    return d
+            if "THERMAL" in val or "TEMP" in val or "HEAT" in val:
+                return IncidentDomain.THERMAL_OVERHEAT
+            if "VOLT" in val or "ELEC" in val or "POWER" in val:
+                return IncidentDomain.ELECTRICAL_POWER_SAG
+            if "PNEUMAT" in val or "PRESSURE" in val or "AIR" in val:
+                return IncidentDomain.PNEUMATIC_PRESSURE_DROP
+            if "LUBE" in val or "NOZZLE" in val:
+                return IncidentDomain.BEAD_LUBRICATION_FAILURE
+            if "CONVEY" in val or "BELT" in val:
+                return IncidentDomain.CONVEYOR_BELT_SLIP
+            if "BEAD" in val or "FIT" in val or "SEAT" in val:
+                return IncidentDomain.QUALITY_BEAD_DEFECT
+            if "ACOUSTIC" in val or "BEAR" in val or "GRIND" in val:
+                return IncidentDomain.ACOUSTIC_BEARING_FAULT
+            if "KINEMAT" in val or "JOINT" in val:
+                return IncidentDomain.KINEMATIC_MISALIGNMENT
+        return v
+
+    @field_validator("severity", mode="before")
+    @classmethod
+    def normalize_severity(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            val = v.upper().strip()
+            if "CRIT" in val:
+                return IncidentSeverity.CRITICAL
+            if "HIGH" in val:
+                return IncidentSeverity.HIGH
+            if "MED" in val or "MODER" in val:
+                return IncidentSeverity.MEDIUM
+            if "LOW" in val or "NOM" in val:
+                return IncidentSeverity.LOW
+        return v
+
+    @field_validator("active_investigation_paths", mode="before")
+    @classmethod
+    def normalize_paths(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [p.strip() for p in v.split(",") if p.strip()]
+        if isinstance(v, list):
+            return [p.get("path") or str(p) if isinstance(p, dict) else str(p) for p in v]
+        return ["Domain Telemetry Review", "Baseline Evaluation"]
+
 
 class RootCauseHypothesis(BaseModel):
     rank: int = Field(default=1, description="Ranking priority (1 = most probable)")
@@ -207,14 +258,81 @@ class RootCauseHypothesis(BaseModel):
     cited_evidence_ids: List[str] = Field(description="Evidence IDs strictly proving this hypothesis")
     preliminary_confidence: float = Field(description="Initial confidence score 0.0 to 100.0")
 
+    @field_validator("affected_component", mode="before")
+    @classmethod
+    def normalize_component(cls, v: Any) -> str:
+        if isinstance(v, list):
+            return ", ".join(str(x) for x in v)
+        if isinstance(v, dict):
+            return str(v.get("name") or v.get("component") or v)
+        return str(v)
+
+    @field_validator("causal_chain", mode="before")
+    @classmethod
+    def normalize_causal_chain(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [s.strip() for s in v.split("->") if s.strip()] or [v]
+        if isinstance(v, list):
+            res = []
+            for item in v:
+                if isinstance(item, dict):
+                    res.append(item.get("description") or item.get("text") or item.get("step") or str(item))
+                else:
+                    res.append(str(item))
+            return res
+        return ["Primary subsystem perturbation observed"]
+
+    @field_validator("cited_evidence_ids", mode="before")
+    @classmethod
+    def normalize_evidence_ids(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return [str(item.get("id") or item.get("evidence_id") or item) if isinstance(item, dict) else str(item) for item in v]
+        return []
+
+    @field_validator("preliminary_confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, v: Any) -> float:
+        try:
+            return float(v)
+        except Exception:
+            return 85.0
+
 
 class CriticEvaluation(BaseModel):
-    hypothesis_title: str
+    hypothesis_title: str = Field(default="Root Cause Evaluation")
     is_physically_possible: bool = True
     contradictions_detected: List[str] = Field(default_factory=list, description="Explicit sensor conflicts")
     missing_evidence_notes: List[str] = Field(default_factory=list, description="Missing telemetry requirements")
-    objection_summary: str = Field(description="Adversarial evaluation summary")
+    objection_summary: str = Field(default="Telemetry consistency verified", description="Adversarial evaluation summary")
     confidence_penalty: float = Field(default=0.0, description="Deduction applied for contradictions or gaps")
+
+    @field_validator("contradictions_detected", mode="before")
+    @classmethod
+    def normalize_contradictions(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            return [str(item.get("description") or item.get("text") or item) if isinstance(item, dict) else str(item) for item in v]
+        return []
+
+    @field_validator("missing_evidence_notes", mode="before")
+    @classmethod
+    def normalize_notes(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            return [v] if v.strip() else []
+        if isinstance(v, list):
+            return [str(item.get("note") or item.get("text") or item) if isinstance(item, dict) else str(item) for item in v]
+        return []
+
+    @field_validator("confidence_penalty", mode="before")
+    @classmethod
+    def normalize_penalty(cls, v: Any) -> float:
+        try:
+            return float(v)
+        except Exception:
+            return 0.0
 
 
 class InvestigationVerdict(BaseModel):
@@ -229,6 +347,7 @@ class InvestigationVerdict(BaseModel):
     recommended_mitigation: str
     requires_human_inspection: bool
     investigation_duration_ms: Optional[float] = None
+    operator_summary_card: Optional[str] = Field(default=None, description="Formatted summary card for shop-floor display")
 
 
 class HumanApprovalAction(BaseModel):

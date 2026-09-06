@@ -1,5 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header';
+import CommandSidebar from './components/CommandSidebar';
+import CommandTopbar from './components/CommandTopbar';
+import MissionDecisionPanel from './components/MissionDecisionPanel';
+import IncidentSummary from './components/IncidentSummary';
+import DiagnosisPanel from './components/DiagnosisPanel';
 import RobotViewer from './components/RobotViewer';
 import ScenarioSelector from './components/ScenarioSelector';
 import AgentDeliberationGraph from './components/AgentDeliberationGraph';
@@ -7,7 +12,14 @@ import MultimodalInspector from './components/MultimodalInspector';
 import CriticDebateView from './components/CriticDebateView';
 import HumanApprovalBar from './components/HumanApprovalBar';
 import IncidentHistoryDrawer from './components/IncidentHistoryDrawer';
-import { useInvestigationStream } from './hooks/useInvestigationStream';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import {
+  fetchScenarios,
+  triggerScenarioInvestigation,
+  streamScenarioInvestigation,
+  fetchIncidentDetails,
+  submitHumanApproval
+} from './services/api';
 
 export default function App() {
   const [scenarios, setScenarios] = useState([]);
@@ -21,69 +33,16 @@ export default function App() {
   const [verdict, setVerdict] = useState(null);
   const [activeFaultJoint, setActiveFaultJoint] = useState("Joint_3");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isAnalyticsOpen, setIsAnalyticsOpen] = useState(false);
   const autoTriggeredRef = useRef(false);
-  const isMountedRef = useRef(true);
-
-  const {
-    isStreaming,
-    agentTraces: streamTraces,
-    activeAgent: streamActiveAgent,
-    finalVerdict: streamVerdict,
-    error: streamError,
-    startStream,
-    abortStream
-  } = useInvestigationStream();
-
-  const finalVerdictRef = useRef(null);
-  const streamErrorRef = useRef(null);
-  const tracesRef = useRef([]);
-
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-      abortStream();
-    };
-  }, [abortStream]);
-
-  useEffect(() => {
-    finalVerdictRef.current = streamVerdict;
-  }, [streamVerdict]);
-
-  useEffect(() => {
-    streamErrorRef.current = streamError;
-  }, [streamError]);
-
-  useEffect(() => {
-    tracesRef.current = streamTraces;
-  }, [streamTraces]);
-
-  useEffect(() => {
-    if (isStreaming) {
-      if (streamTraces && streamTraces.length > 0) {
-        setAgentTraces(streamTraces);
-      }
-      if (streamActiveAgent) {
-        setActiveAgent(streamActiveAgent);
-      }
-      if (streamVerdict) {
-        setVerdict(streamVerdict);
-        setStatus(
-          streamVerdict.status === "CONCLUSIVE"
-            ? "PENDING_APPROVAL"
-            : streamVerdict.status
-        );
-      }
-    }
-  }, [isStreaming, streamTraces, streamActiveAgent, streamVerdict]);
+  const currentAbortRef = useRef(null);
 
   // Load scenarios only once and auto-trigger Scenario 1
   useEffect(() => {
     if (autoTriggeredRef.current) return;
     autoTriggeredRef.current = true;
 
-    fetch('/api/v1/scenarios')
-      .then(res => res.json())
+    fetchScenarios()
       .then(data => {
         if (Array.isArray(data) && data.length > 0) {
           setScenarios(data);
@@ -94,168 +53,145 @@ export default function App() {
   }, []);
 
   const handleTriggerScenario = async (scenarioId) => {
+    // Abort any in-flight stream
+    if (currentAbortRef.current) {
+      currentAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    currentAbortRef.current = abortController;
+
     setActiveScenarioId(scenarioId);
     setIsInvestigating(true);
     setStatus("INVESTIGATING");
     setAgentTraces([]);
     setActiveAgent("TRIAGE_AGENT");
     setVerdict(null);
-
-    finalVerdictRef.current = null;
-    streamErrorRef.current = null;
-    tracesRef.current = [];
-
-    if (scenarioId.includes("THERMAL") || scenarioId.includes("CONTRADICTORY")) {
-      setActiveFaultJoint("Joint_3");
-    } else {
-      setActiveFaultJoint(null);
-    }
+    setActiveFaultJoint(null);
 
     try {
-      // Load scenario telemetry for the dashboard
-      const presetRes = await fetch('/api/v1/scenarios');
-
-      if (!presetRes.ok) {
-        throw new Error("Could not load scenario presets");
+      // Pre-populate telemetry from presets
+      const allPresets = await fetchScenarios();
+      const targetPreset = allPresets.find(s => s.scenario_id === scenarioId);
+      if (targetPreset) {
+        setTelemetry(targetPreset.snapshot);
       }
 
-      const allPresets = await presetRes.json();
-      const targetPreset = allPresets.find(
-        s => s.scenario_id === scenarioId
-      );
+      // Stream the multi-agent investigation in real-time
+      let streamedIncidentId = null;
+      let finalVerdictReceived = null;
 
-      if (!targetPreset) {
-        throw new Error(`Scenario not found: ${scenarioId}`);
-      }
-
-      if (!isMountedRef.current) return;
-      setTelemetry(targetPreset.snapshot);
-
-      let sseSuccess = false;
-      let incidentId = null;
-
-      // Ingest incident to ensure DB persistence and valid incident_id for sign-offs
       try {
-        const ingestRes = await fetch('/api/v1/incidents/ingest', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: targetPreset.title,
-            severity: targetPreset.expected_outcome === "CONCLUSIVE" ? "CRITICAL" : "HIGH",
-            snapshot: targetPreset.snapshot
-          })
-        });
-        if (ingestRes.ok) {
-          const ingestData = await ingestRes.json();
-          incidentId = ingestData.incident_id;
-          if (isMountedRef.current) {
-            setCurrentIncidentId(incidentId);
-          }
-        }
-      } catch (ingestErr) {
-        console.warn("Pre-ingestion skipped or failed:", ingestErr);
-      }
-
-      // Attempt SSE stream investigation first
-      try {
-        await startStream(targetPreset.snapshot, incidentId);
-
-        if (!streamErrorRef.current && (finalVerdictRef.current || tracesRef.current.length > 0)) {
-          sseSuccess = true;
-        }
-      } catch (streamErr) {
-        console.warn("SSE stream execution failed, falling back to /trigger:", streamErr);
-        sseSuccess = false;
-      }
-
-      // Fall back to existing /trigger flow if SSE failed
-      if (!sseSuccess) {
-        console.log("Executing fallback to POST /api/v1/scenarios/.../trigger");
-        const triggerRes = await fetch(
-          `/api/v1/scenarios/${encodeURIComponent(scenarioId)}/trigger`,
-          {
-            method: 'POST'
-          }
-        );
-
-        if (!triggerRes.ok) {
-          const errorText = await triggerRes.text();
-          throw new Error(
-            `Scenario investigation failed: ${triggerRes.status} ${errorText}`
-          );
-        }
-
-        const triggerData = await triggerRes.json();
-        if (!isMountedRef.current) return;
-
-        const fallbackIncidentId = triggerData.incident_id;
-        const finalVerdict = triggerData.verdict;
-
-        setCurrentIncidentId(fallbackIncidentId);
-        setVerdict(finalVerdict);
-
-        setStatus(
-          triggerData.status ||
-          (
-            finalVerdict?.status === "CONCLUSIVE"
-              ? "PENDING_APPROVAL"
-              : finalVerdict?.status
-          )
-        );
-
-        // Reload the persisted investigation traces from DB
-        const detailRes = await fetch(
-          `/api/v1/incidents/${fallbackIncidentId}`
-        );
-
-        if (detailRes.ok) {
-          const detail = await detailRes.json();
-
-          const normalizedTraces = (
-            detail.agent_traces || []
-          ).map(trace => {
-            if (trace.step === "FINAL_VERDICT") {
-              return {
-                ...trace,
-                verdict: trace.payload
-              };
+        await streamScenarioInvestigation(scenarioId, {
+          signal: abortController.signal,
+          onEvent: (event) => {
+            if (event.incident_id) {
+              streamedIncidentId = event.incident_id;
+              setCurrentIncidentId(event.incident_id);
             }
 
-            return trace;
-          });
+            // Track active agent in pipeline
+            if (event.agent) {
+              if (event.step === "STARTED") {
+                setActiveAgent(event.agent);
+              }
+            }
 
-          if (isMountedRef.current) {
-            setAgentTraces(normalizedTraces);
+            // Progressively accumulate or update agent trace records
+            if (event.agent) {
+              setAgentTraces((prev) => {
+                const existingIdx = prev.findIndex(t => t.agent === event.agent);
+                const normalized = {
+                  agent: event.agent,
+                  step: event.step,
+                  message: event.message,
+                  payload: event.payload || event.verdict,
+                  verdict: event.verdict || event.payload,
+                  created_at: event.created_at || new Date().toISOString()
+                };
+
+                if (existingIdx >= 0) {
+                  // Replace started placeholder with completed payload
+                  if (event.step === "COMPLETED" || event.step === "FINAL_VERDICT") {
+                    const nextTraces = [...prev];
+                    nextTraces[existingIdx] = normalized;
+                    return nextTraces;
+                  }
+                  return prev;
+                }
+                return [...prev, normalized];
+              });
+            }
+
+            // Immediate 3D fault joint highlighting on Triage evaluation
+            if (event.agent === "TRIAGE_AGENT" && event.step === "COMPLETED") {
+              const payload = event.payload || {};
+              const containment = (payload.immediate_containment_action || "").toLowerCase();
+              const domain = (payload.incident_domain || "").toLowerCase();
+
+              if (containment.includes("joint 3") || containment.includes("joint_3") || domain.includes("thermal") || scenarioId.includes("THERMAL")) {
+                setActiveFaultJoint("Joint_3");
+              } else if (containment.includes("joint 1") || containment.includes("joint_1")) {
+                setActiveFaultJoint("Joint_1");
+              } else if (containment.includes("joint 2") || containment.includes("joint_2")) {
+                setActiveFaultJoint("Joint_2");
+              } else if (containment.includes("joint 4") || containment.includes("joint_4")) {
+                setActiveFaultJoint("Joint_4");
+              } else if (containment.includes("joint 5") || containment.includes("joint_5")) {
+                setActiveFaultJoint("Joint_5");
+              } else if (containment.includes("joint 6") || containment.includes("joint_6")) {
+                setActiveFaultJoint("Joint_6");
+              }
+            }
+
+            // Final verdict arrived
+            if (event.step === "FINAL_VERDICT" && event.verdict) {
+              finalVerdictReceived = event.verdict;
+              setVerdict(finalVerdictReceived);
+              setStatus(
+                finalVerdictReceived.status === "CONCLUSIVE"
+                  ? "PENDING_APPROVAL"
+                  : finalVerdictReceived.status
+              );
+              setActiveAgent(null);
+
+              const comp = (finalVerdictReceived.primary_root_cause?.affected_component || "").toLowerCase();
+              if (comp.includes("joint 3") || comp.includes("joint_3") || comp.includes("harmonic")) {
+                setActiveFaultJoint("Joint_3");
+              }
+            }
+          },
+          onError: (err) => {
+            console.warn("SSE stream error, falling back to sync endpoint:", err);
+          },
+          onComplete: () => {
+            setIsInvestigating(false);
+            setActiveAgent(null);
           }
-        }
-      } else {
-        // SSE completed successfully
-        if (isMountedRef.current) {
-          const derivedIncidentId = incidentId || finalVerdictRef.current?.incident_id || tracesRef.current[0]?.payload?.incident_id || tracesRef.current[0]?.incident_id;
-          if (derivedIncidentId) {
-            setCurrentIncidentId(derivedIncidentId);
-          }
-          if (finalVerdictRef.current) {
-            setVerdict(finalVerdictRef.current);
-            setStatus(
-              finalVerdictRef.current.status === "CONCLUSIVE"
-                ? "PENDING_APPROVAL"
-                : finalVerdictRef.current.status
-            );
-          }
-        }
+        });
+      } catch (streamErr) {
+        if (streamErr.name === "AbortError") return;
+        console.warn("Streaming threw error, falling back to sync:", streamErr);
+
+        // Fallback to synchronous endpoint
+        const triggerData = await triggerScenarioInvestigation(scenarioId);
+        setCurrentIncidentId(triggerData.incident_id);
+        setVerdict(triggerData.verdict);
+        setStatus(
+          triggerData.status ||
+          (triggerData.verdict?.status === "CONCLUSIVE" ? "PENDING_APPROVAL" : triggerData.verdict?.status)
+        );
+        const detail = await fetchIncidentDetails(triggerData.incident_id);
+        setAgentTraces(detail.agent_traces || []);
       }
 
     } catch (err) {
-      if (isMountedRef.current) {
+      if (err.name !== "AbortError") {
         console.error("Investigation execution failed:", err);
         setStatus("FAILED");
       }
     } finally {
-      if (isMountedRef.current) {
-        setIsInvestigating(false);
-        setActiveAgent(null);
-      }
+      setIsInvestigating(false);
+      setActiveAgent(null);
     }
   };
 
@@ -290,12 +226,7 @@ export default function App() {
     if (!currentIncidentId) return;
 
     try {
-      const res = await fetch(`/api/v1/incidents/${currentIncidentId}/approve`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, engineer_id, notes })
-      });
-      const data = await res.json();
+      const data = await submitHumanApproval(currentIncidentId, { action, engineer_id, notes });
       if (data.status === "ACTION_RECORDED") {
         if (action === "APPROVE") setStatus("APPROVED");
         if (action === "OVERRIDE") setStatus("OVERRIDDEN");
@@ -310,73 +241,52 @@ export default function App() {
   const hasAcousticFault = activeScenarioId?.includes("THERMAL") || activeScenarioId?.includes("PNEUMATIC");
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-cyan-500/30">
-      {/* Header Bar */}
-      <Header
-        status={status}
+    <div className="min-h-screen text-slate-100 selection:bg-cyan-500/30">
+      <CommandSidebar
+        activeScenarioId={activeScenarioId}
+        onSelectScenario={handleTriggerScenario}
         isInvestigating={isInvestigating}
-        onReset={() => handleTriggerScenario(activeScenarioId)}
+        onOpenAnalytics={() => setIsAnalyticsOpen(true)}
         onOpenHistory={() => setIsHistoryOpen(true)}
       />
 
-      {/* Main Command Center Layout */}
-      <main className="grow p-4 md:p-6 space-y-5 max-w-[1700px] w-full mx-auto">
-        {/* Scenario Benchmark Bar */}
-        <ScenarioSelector
-          activeScenarioId={activeScenarioId}
-          onSelectScenario={handleTriggerScenario}
-          isInvestigating={isInvestigating}
-        />
-
-        {/* Primary Workspace: 3D Twin (Left) + Multi-Agent Reasoning Graph (Right) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-          {/* Left Column: 3D Robotic Arm Twin & Multimodal Inspector */}
-          <div className="lg:col-span-7 space-y-5 flex flex-col">
-            <RobotViewer
-              activeFaultJoint={activeFaultJoint}
-              jointsData={telemetry.joints || {}}
-              isLevitating={isInvestigating}
-            />
-
-            <MultimodalInspector
-              telemetry={telemetry}
-              hasThermalFault={hasThermalFault}
-              hasAcousticFault={hasAcousticFault}
-            />
-          </div>
-
-          {/* Right Column: Multi-Agent Deliberation Graph */}
-          <div className="lg:col-span-5 flex flex-col">
-            <AgentDeliberationGraph
-              agentTraces={agentTraces}
-              activeAgent={activeAgent}
-              isInvestigating={isInvestigating}
-            />
-          </div>
-        </div>
-
-        {/* Secondary Row: Adversarial Debate Breakdown */}
-        <CriticDebateView
-          rootCause={verdict?.primary_root_cause}
-          criticReport={verdict?.critic_report}
-        />
-
-        {/* Bottom Sticky Action Gateway: Human-in-the-Loop Sign-off */}
-        <HumanApprovalBar
+      <div className="lg:pl-[230px] min-h-screen">
+        <CommandTopbar
+          scenarioId={activeScenarioId}
+          incidentId={currentIncidentId}
           status={status}
-          confidenceScore={verdict?.final_confidence_score || 88.5}
-          recommendedMitigation={verdict?.recommended_mitigation}
-          onAction={handleHumanAction}
-          isProcessing={isInvestigating}
+          isInvestigating={isInvestigating}
+          activeAgent={activeAgent}
+          onReset={() => handleTriggerScenario(activeScenarioId)}
         />
-      </main>
 
-      {/* Slide-over Investigation History Drawer */}
-      <IncidentHistoryDrawer
-        isOpen={isHistoryOpen}
-        onClose={() => setIsHistoryOpen(false)}
-        onSelectIncident={handleSelectIncident}
-      />
+        <main className="px-3 py-4 md:px-5 md:py-5 max-w-[1900px] mx-auto space-y-4">
+          <section id="command" className="scroll-mt-20">
+            <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1.62fr)_minmax(360px,.78fr)] gap-4 items-stretch">
+              <div className="min-w-0">
+                <RobotViewer activeFaultJoint={activeFaultJoint} jointsData={telemetry.joints || {}} isLevitating={isInvestigating} />
+              </div>
+              <MissionDecisionPanel status={status} verdict={verdict} isInvestigating={isInvestigating} activeAgent={activeAgent} agentTraces={agentTraces} />
+            </div>
+          </section>
+
+          <section id="investigation" className="scroll-mt-20">
+            <AgentDeliberationGraph agentTraces={agentTraces} activeAgent={activeAgent} isInvestigating={isInvestigating} />
+          </section>
+
+          <section id="evidence" className="scroll-mt-20 grid grid-cols-1 2xl:grid-cols-[minmax(0,1.55fr)_minmax(360px,.75fr)] gap-4 items-stretch">
+            <div className="min-w-0"><MultimodalInspector telemetry={telemetry} hasThermalFault={hasThermalFault} hasAcousticFault={hasAcousticFault} /></div>
+            <CriticDebateView rootCause={verdict?.primary_root_cause} criticReport={verdict?.critic_report} isInvestigating={isInvestigating} />
+          </section>
+
+          <section id="human-gate" className="scroll-mt-20">
+            <HumanApprovalBar status={status} confidenceScore={verdict?.final_confidence_score ?? 0} recommendedMitigation={verdict?.recommended_mitigation} onAction={handleHumanAction} isProcessing={isInvestigating} />
+          </section>
+        </main>
+      </div>
+
+      <IncidentHistoryDrawer isOpen={isHistoryOpen} onClose={() => setIsHistoryOpen(false)} onSelectIncident={handleSelectIncident} />
+      <AnalyticsDashboard isOpen={isAnalyticsOpen} onClose={() => setIsAnalyticsOpen(false)} />
     </div>
   );
 }

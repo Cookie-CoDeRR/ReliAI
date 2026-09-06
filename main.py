@@ -4,10 +4,10 @@ import asyncio
 import logging
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import update
 from harness.schemas import (
     MultimodalTelemetrySnapshot,
     InvestigationVerdict
@@ -15,8 +15,8 @@ from harness.schemas import (
 from harness.orchestrator import InvestigationOrchestrator
 from harness.ollama_client import AsyncOllamaClient
 from harness.baseline_engine import BaselineEngine
-from web_backend.database import init_db, get_db
-from web_backend.service import IncidentService
+from web_backend.database import init_db, AsyncSessionLocal
+from web_backend.models import IncidentRecord
 from web_backend.router import router as web_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -30,9 +30,39 @@ orchestrator = InvestigationOrchestrator(ollama_client=ollama_client, baseline_e
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize database tables & store singleton references
-    logger.info("Initializing SQLite/PostgreSQL database tables...")
-    await init_db()
+    # Startup: apply version-controlled Alembic migrations & verify tables
+    try:
+        from alembic.config import Config as AlembicConfig
+        from alembic import command as alembic_command
+        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic schema migrations applied (head).")
+    except Exception as mig_err:
+        logger.warning(f"Alembic migration warning: {mig_err}. Running init_db() fallback.")
+        await init_db()
+
+
+    # --- Ghost record cleanup ---
+    # Any incident stuck in INVESTIGATING at boot means the previous server process
+    # crashed or was killed mid-investigation. Mark them FAILED so they don't clutter
+    # the history drawer or block future investigations.
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            update(IncidentRecord)
+            .where(IncidentRecord.status == "INVESTIGATING")
+            .values(status="FAILED")
+            .returning(IncidentRecord.id)
+        )
+        zombie_ids = [row[0] for row in result.fetchall()]
+        await session.commit()
+        if zombie_ids:
+            logger.warning(
+                f"Startup cleanup: marked {len(zombie_ids)} stale INVESTIGATING "
+                f"incident(s) as FAILED: {zombie_ids}"
+            )
+        else:
+            logger.info("Startup cleanup: no stale INVESTIGATING records found.")
+
     app.state.orchestrator = orchestrator
     logger.info("ReliAI Platform ready.")
     yield
@@ -62,6 +92,8 @@ app.add_middleware(
 app.include_router(web_router)
 
 
+@app.get("/")
+@app.get("/health")
 @app.get("/harness/health")
 async def health_check():
     """
@@ -107,25 +139,15 @@ async def investigate_incident(snapshot: MultimodalTelemetrySnapshot, incident_i
 
 
 @app.post("/harness/investigate/stream")
-async def stream_incident_investigation(
-    snapshot: MultimodalTelemetrySnapshot,
-    incident_id: Optional[str] = None,
-    db: AsyncSession = Depends(get_db)
-):
+async def stream_incident_investigation(snapshot: MultimodalTelemetrySnapshot, incident_id: Optional[str] = None):
     """
     Server-Sent Events (SSE) streaming endpoint.
     Emits real-time progress events as each agent deliberates:
     Triage ➔ Evidence RAG ➔ Domain Analysis ➔ Root Cause ➔ Critic Falsification ➔ Confidence Engine.
-    Persists intermediate agent traces and verdict details to SQLite.
     """
     async def event_generator():
         try:
-            async for event in IncidentService.stream_and_investigate_incident(
-                db=db,
-                snapshot=snapshot,
-                orchestrator=orchestrator,
-                incident_id=incident_id
-            ):
+            async for event in orchestrator.run_investigation_stream(snapshot, incident_id=incident_id):
                 yield f"data: {json.dumps(event)}\n\n"
             yield "event: complete\ndata: {}\n\n"
         except Exception as err:
