@@ -12,6 +12,17 @@ from web_backend.services.evidence_service import EvidenceService
 logger = logging.getLogger(__name__)
 
 
+def _safe_int(val: Any, default: int) -> int:
+    """Safely coerces parameter value to integer or falls back to default."""
+    if val is None:
+        return default
+    try:
+        res = int(val)
+        return res if res >= 0 else default
+    except (ValueError, TypeError):
+        return default
+
+
 class ToolGatewayAdapter:
     def __init__(
         self,
@@ -46,31 +57,46 @@ class ToolGatewayAdapter:
 
         try:
             if tool_name == "search_logs":
+                if not db:
+                    return {
+                        "status": "ERROR",
+                        "error": "Database session required for tool 'search_logs'"
+                    }
                 return await self.tool_service.search_logs(
                     db=db,
                     query=params.get("query"),
                     incident_id=params.get("incident_id"),
                     agent_name=params.get("agent_name"),
-                    limit=params.get("limit", 50),
-                    offset=params.get("offset", 0)
+                    limit=_safe_int(params.get("limit"), 50),
+                    offset=_safe_int(params.get("offset"), 0)
                 )
 
             elif tool_name == "get_maintenance_history":
+                if not db:
+                    return {
+                        "status": "ERROR",
+                        "error": "Database session required for tool 'get_maintenance_history'"
+                    }
                 return await self.tool_service.get_maintenance_history(
                     db=db,
                     component=params.get("component"),
                     incident_id=params.get("incident_id"),
-                    limit=params.get("limit", 50)
+                    limit=_safe_int(params.get("limit"), 50)
                 )
 
             elif tool_name == "find_similar_incidents":
+                if not db:
+                    return {
+                        "status": "ERROR",
+                        "error": "Database session required for tool 'find_similar_incidents'"
+                    }
                 return await self.tool_service.find_similar_incidents(
                     db=db,
                     station_id=params.get("station_id"),
                     domain=params.get("domain"),
                     severity=params.get("severity"),
                     search=params.get("search"),
-                    limit=params.get("limit", 10)
+                    limit=_safe_int(params.get("limit"), 10)
                 )
 
             elif tool_name == "get_incident_evidence":
@@ -83,20 +109,20 @@ class ToolGatewayAdapter:
                 if not db:
                     return {
                         "status": "ERROR",
-                        "error": "Database session required for 'get_incident_evidence'"
+                        "error": "Database session required for tool 'get_incident_evidence'"
                     }
                 return await self.evidence_service.get_incident_evidence(db=db, incident_id=incident_id)
 
             elif tool_name == "search_documents":
                 query = params.get("query")
-                if not query:
+                if not query or not str(query).strip():
                     return {
                         "status": "ERROR",
                         "error": "Missing required parameter 'query' for tool 'search_documents'"
                     }
                 return await self.tool_service.search_documents(
-                    query=query,
-                    limit=params.get("limit", 10),
+                    query=str(query).strip(),
+                    limit=_safe_int(params.get("limit"), 10),
                     db=db
                 )
 
