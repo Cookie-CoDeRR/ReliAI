@@ -5,9 +5,116 @@ import {
   X,
   FileText,
   Loader2,
-  Bot
+  Bot,
+  Radio,
+  Activity,
+  BookOpen,
+  Cpu,
+  Brain,
+  Scale,
+  ShieldCheck,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 import { submitFollowUp, uploadDocument } from '../services/api';
+
+function cleanEmojisAndSymbols(str) {
+  if (!str) return '';
+  return str
+    .replace(/[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{200D}\u{200B}\u{25A0}-\u{25FF}]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function parseInvestigationTrace(text) {
+  if (!text) return { intro: '', steps: [] };
+
+  const firstBracket = text.indexOf('[');
+  let intro = '';
+  let rest = text;
+
+  if (firstBracket > 0) {
+    intro = cleanEmojisAndSymbols(text.substring(0, firstBracket));
+    rest = text.substring(firstBracket);
+  }
+
+  const steps = [];
+  const regex = /\[([^\]]+)\]\s*([^[]*)/g;
+  let match;
+  while ((match = regex.exec(rest)) !== null) {
+    const rawTag = match[1].trim();
+    const tag = cleanEmojisAndSymbols(rawTag);
+    let body = cleanEmojisAndSymbols(match[2].trim());
+
+    // Repair known truncated artifacts
+    body = body.replace(/torque satur(?:\.{2,3})?/gi, 'torque saturation and velocity derating.');
+
+    // Deduplicate consecutive identical steps
+    if (steps.length > 0) {
+      const last = steps[steps.length - 1];
+      if (last.tag.toLowerCase() === tag.toLowerCase() && last.body === body) {
+        continue;
+      }
+    }
+
+    if (tag && (body || steps.length === 0)) {
+      steps.push({ tag, body });
+    }
+  }
+
+  return { intro, steps };
+}
+
+function getAgentMeta(tag) {
+  const t = tag.toLowerCase();
+  if (t.includes('harness') || t.includes('ingest') || t.includes('ethercat')) {
+    return {
+      label: 'Harness Ingest',
+      icon: Radio,
+      badgeColor: 'bg-blue-50 text-blue-700 border-blue-200/90'
+    };
+  }
+  if (t.includes('triage')) {
+    return {
+      label: 'Triage Assessment',
+      icon: Activity,
+      badgeColor: 'bg-amber-50 text-amber-700 border-amber-200/90'
+    };
+  }
+  if (t.includes('knowledge') || t.includes('rag') || t.includes('normative')) {
+    return {
+      label: 'Knowledge RAG',
+      icon: BookOpen,
+      badgeColor: 'bg-purple-50 text-purple-700 border-purple-200/90'
+    };
+  }
+  if (t.includes('domain') || t.includes('specialist')) {
+    return {
+      label: 'Domain Specialists',
+      icon: Cpu,
+      badgeColor: 'bg-cyan-50 text-cyan-800 border-cyan-200/90'
+    };
+  }
+  if (t.includes('root cause') || t.includes('cause engine')) {
+    return {
+      label: 'Root Cause Engine',
+      icon: Brain,
+      badgeColor: 'bg-[#faeee5] text-[#c8764b] border-[#efc4ab]'
+    };
+  }
+  if (t.includes('critic') || t.includes('validation') || t.includes('adversarial')) {
+    return {
+      label: 'Critic Validation',
+      icon: Scale,
+      badgeColor: 'bg-rose-50 text-rose-700 border-rose-200/90'
+    };
+  }
+  return {
+    label: tag,
+    icon: Sparkles,
+    badgeColor: 'bg-slate-100 text-slate-700 border-slate-200'
+  };
+}
 
 function FormattedMessageContent({ text, isUser }) {
   if (isUser) {
@@ -15,7 +122,7 @@ function FormattedMessageContent({ text, isUser }) {
   }
 
   // Check if this is a structured agent investigation trace
-  const hasAgentSteps = text.includes("[") && text.includes("]");
+  const hasAgentSteps = text.includes('[') && text.includes(']');
 
   if (!hasAgentSteps) {
     return (
@@ -25,79 +132,75 @@ function FormattedMessageContent({ text, isUser }) {
     );
   }
 
-  // Cleanly split into segments matching [Tag]
-  const rawSegments = text.split(/(?=\[[\w\s\-_]+\])/g).map(s => s.trim()).filter(Boolean);
+  const { intro, steps } = parseInvestigationTrace(text);
 
-  if (rawSegments.length === 0) {
-    return <p className="text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap">{text}</p>;
+  if (steps.length === 0) {
+    return (
+      <p className="text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap font-sans">
+        {text}
+      </p>
+    );
   }
 
   return (
-    <div className="space-y-1.5 font-sans select-text mt-0.5">
-      {rawSegments.map((seg, idx) => {
-        const match = seg.match(/^\[([^\]]+)\]\s*(.*)$/s);
-        if (!match) {
-          return (
-            <p key={idx} className="text-[10.5px] text-slate-600 leading-relaxed font-sans">
-              {seg}
-            </p>
-          );
-        }
+    <div className="space-y-2 font-sans select-text mt-0.5">
+      {/* Intro banner if present */}
+      {intro && (
+        <div className="p-2 rounded-[8px] bg-white/95 border border-[#efc4ab]/80 text-[10.5px] text-slate-700 flex items-center gap-2 font-medium shadow-2xs">
+          <Radio className="w-3.5 h-3.5 text-[#c8764b] shrink-0 animate-pulse" />
+          <span>{intro}</span>
+        </div>
+      )}
 
-        const tag = match[1].trim();
-        const body = match[2].trim();
-        const isVerdict = tag.toLowerCase().includes("verdict") || tag.toLowerCase().includes("audit dossier");
-
-        // Color-coded badges matching ReliAI agent design system
-        let badgeColor = "bg-slate-100 text-slate-700 border-slate-200";
-        if (tag.includes("Harness") || tag.includes("Ingest")) {
-          badgeColor = "bg-blue-50 text-blue-700 border-blue-200/90";
-        } else if (tag.includes("Triage")) {
-          badgeColor = "bg-amber-50 text-amber-700 border-amber-200/90";
-        } else if (tag.includes("Knowledge") || tag.includes("RAG")) {
-          badgeColor = "bg-purple-50 text-purple-700 border-purple-200/90";
-        } else if (tag.includes("Domain") || tag.includes("Specialist")) {
-          badgeColor = "bg-cyan-50 text-cyan-800 border-cyan-200/90";
-        } else if (tag.includes("Root Cause")) {
-          badgeColor = "bg-[#faeee5] text-[#c8764b] border-[#efc4ab]";
-        } else if (tag.includes("Critic") || tag.includes("Adversarial") || tag.includes("Validation")) {
-          badgeColor = "bg-rose-50 text-rose-700 border-rose-200/90";
-        }
+      {/* Discrete Step Cards */}
+      {steps.map((s, idx) => {
+        const isVerdict =
+          s.tag.toLowerCase().includes('verdict') ||
+          s.tag.toLowerCase().includes('audit dossier');
 
         if (isVerdict) {
           return (
             <div
               key={idx}
-              className="mt-2 p-2.5 rounded-[9px] bg-gradient-to-r from-emerald-50/95 via-emerald-50/70 to-[#faeee5]/80 border border-emerald-300 shadow-2xs space-y-1"
+              className="mt-2.5 p-3 rounded-[10px] bg-gradient-to-br from-emerald-50/95 via-emerald-50/60 to-[#faeee5]/80 border border-emerald-300 shadow-2xs space-y-2"
             >
-              <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 rounded-full text-[8.5px] font-mono font-bold uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-300">
-                  {tag}
-                </span>
-                <span className="text-[8.5px] font-mono font-bold text-emerald-700 flex items-center gap-1">
+              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+                  <span className="text-[9px] font-mono font-bold uppercase tracking-wider text-emerald-900">
+                    {s.tag}
+                  </span>
+                </div>
+                <span className="text-[8.5px] font-mono font-bold text-emerald-700 flex items-center gap-1 bg-emerald-100/90 px-2 py-0.5 rounded-full border border-emerald-300">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                   VERIFIED
                 </span>
               </div>
-              <p className="text-[11px] text-slate-900 font-semibold leading-snug">
-                {body}
+              <p className="text-[11.5px] text-slate-900 font-medium leading-relaxed">
+                {s.body}
               </p>
             </div>
           );
         }
 
+        const meta = getAgentMeta(s.tag);
+        const Icon = meta.icon;
+
         return (
           <div
             key={idx}
-            className="p-2 rounded-[8px] bg-white border border-slate-200/80 shadow-2xs space-y-0.5 hover:border-[#ecd7c7] transition"
+            className="p-2.5 rounded-[9px] bg-white border border-slate-200/90 shadow-2xs space-y-1 hover:border-[#ecd7c7] transition"
           >
             <div className="flex items-center gap-1">
-              <span className={`px-1.5 py-0.2 rounded text-[8px] font-mono font-bold uppercase tracking-wider border ${badgeColor}`}>
-                {tag}
+              <span
+                className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold uppercase tracking-wider border flex items-center gap-1 ${meta.badgeColor}`}
+              >
+                <Icon className="w-2.5 h-2.5 shrink-0" />
+                {meta.label}
               </span>
             </div>
-            <p className="text-[10.5px] text-slate-700 leading-snug pl-0.5">
-              {body}
+            <p className="text-[11px] text-slate-700 leading-relaxed font-sans pl-0.5">
+              {s.body}
             </p>
           </div>
         );

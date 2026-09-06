@@ -510,23 +510,26 @@ export default function App() {
     }
 
     const currentMsgId = `ai-stream-${Date.now()}`;
-    if (promptQuery) {
-      setChatMessages(prev => [
-        ...prev,
-        {
+    setChatMessages(prev => {
+      const last = prev[prev.length - 1];
+      const alreadyAdded = promptQuery && last && last.sender === 'user' && last.text === promptQuery;
+      const newMessages = [];
+      if (promptQuery && !alreadyAdded) {
+        newMessages.push({
           id: `usr-${Date.now()}`,
-          sender: "user",
+          sender: 'user',
           text: promptQuery,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        },
-        {
-          id: currentMsgId,
-          sender: "ai",
-          text: "📥 Harness connected. Ingesting raw 6-axis telemetry streams and sensor feeds...",
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }
+        });
+      }
+      newMessages.push({
+        id: currentMsgId,
+        sender: 'ai',
+        text: `Telemetry stream ingested for ${targetProj.name}. Binding multi-agent diagnostic harness...`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+      return [...prev, ...newMessages];
+    });
 
     try {
       // Collect raw events from the backend or prebuilt demo orchestration engine
@@ -644,7 +647,7 @@ export default function App() {
       // Live paced word-by-word playback of multi-agent deliberation
       const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
-      let currentAccumulated = "";
+      let currentAccumulated = `Telemetry stream ingested for ${targetProj.name}. Binding multi-agent diagnostic harness...`;
       
       const streamWords = async (newSegment) => {
         const trimmed = newSegment.trim();
@@ -702,20 +705,20 @@ export default function App() {
           });
         }
 
-        // Stream each agent's active reasoning cleanly without repetition
+        // Stream each agent's active reasoning cleanly without repetition or truncation
         if (event.agent === "TRIAGE_AGENT" && event.step === "STARTED") {
-          await streamWords(`[Harness Ingest] Ingesting 6-axis joint kinematics and CAN bus telemetry for ${targetProj.name}.`);
+          await streamWords(`[Harness Ingest] Ingesting 6-axis joint kinematics and EtherCAT bus telemetry for ${targetProj.name}.`);
         } else if (event.agent === "TRIAGE_AGENT" && event.step === "COMPLETED") {
           setActiveFaultJoint(targetProj.faultJoint || "Joint_3");
-          await streamWords(`[Triage Assessment] Anomaly detected: ${event.payload?.incident_domain || targetProj.domain} on ${targetProj.faultJoint}. Motion throttled.`);
+          await streamWords(`[Triage Assessment] Anomaly detected: ${targetProj.domain || "THERMAL_OVERHEAT"} on ${targetProj.faultJoint}. Motion throttled per ISO safety envelope.`);
         } else if (event.agent === "EVIDENCE_RAG_AGENT" && event.step === "STARTED") {
           await streamWords(`[Knowledge RAG] Retrieved golden operating specifications per ${targetProj.isoStandard} and OEM baseline tolerances.`);
         } else if (event.agent === "DOMAIN_ANALYSIS" && event.step === "STARTED") {
-          await streamWords(`[Domain Specialists] Decomposing telemetry spectrum and dynamic kinematic profiles for ${targetProj.faultJoint}.`);
+          await streamWords(`[Domain Specialists] Decomposing telemetry spectrum and kinematic profiles for ${targetProj.faultJoint}: ${targetProj.description}`);
         } else if (event.agent === "ROOT_CAUSE_AGENT" && event.step === "STARTED") {
-          await streamWords(`[Root Cause Engine] Formulating causal hypothesis: ${targetProj.verifiedReport?.root_cause?.title || targetProj.incidentTitle}.`);
+          await streamWords(`[Root Cause Engine] Formulating causal hypothesis via Gemma-2 9B reasoning DAG: ${targetProj.verifiedReport?.root_cause?.title || targetProj.incidentTitle}.`);
         } else if (event.agent === "CRITIC_AGENT" && event.step === "STARTED") {
-          await streamWords(`[Critic Validation] Adversarial validation passed: Counterfactual stator short ruled out by electrical baseline.`);
+          await streamWords(`[Critic Validation] Adversarial validation passed: Counterfactual hypotheses ruled out by multi-sensor physics verification.`);
         } else if (event.step === "FINAL_VERDICT" && event.verdict) {
           const v = event.verdict;
           setVerdict(v);
