@@ -3,13 +3,8 @@ import time
 import json
 import logging
 from typing import List, Optional, Dict, Any
-<<<<<<< HEAD
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse
-=======
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
->>>>>>> main
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
@@ -336,18 +331,6 @@ async def approve_incident(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-<<<<<<< HEAD
-# =============================================================================
-# KUSHAGRA BACKEND VERTICAL — PHASE 1: SYSTEM STATUS & TOOL ACCESS APIs
-# =============================================================================
-
-_tool_access_service = ToolAccessService()
-
-
-@router.get("/system/status", response_model=SystemStatusResponse, tags=["System Services"])
-async def get_system_status(
-    request: Request,
-=======
 @router.post("/incidents/{incident_id}/cancel")
 async def cancel_incident(
     incident_id: str,
@@ -371,12 +354,45 @@ class FollowUpRequest(BaseModel):
 async def follow_up_investigation(
     incident_id: str,
     req: FollowUpRequest,
->>>>>>> main
     db: AsyncSession = Depends(get_db),
     orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
 ):
     """
-<<<<<<< HEAD
+    Executes a follow-up investigation on an existing incident with additional notes or sensor overrides.
+    """
+    try:
+        verdict = await IncidentService.reinvestigate_with_followup(
+            db=db,
+            incident_id=incident_id,
+            orchestrator=orchestrator,
+            operator_notes=req.operator_notes,
+            telemetry_override=req.telemetry_override
+        )
+        return {
+            "status": "FOLLOW_UP_COMPLETED",
+            "incident_id": incident_id,
+            "verdict": verdict.model_dump() if verdict else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Follow-up investigation failed: {str(e)}")
+
+
+# =============================================================================
+# KUSHAGRA BACKEND VERTICAL — PHASE 1: SYSTEM STATUS & TOOL ACCESS APIs
+# =============================================================================
+
+_tool_access_service = ToolAccessService()
+
+
+@router.get("/system/status", response_model=SystemStatusResponse, tags=["System Services"])
+async def get_system_status(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
     Returns live operational status across Database, Ollama LLM, Storage, and Tool Access Layer.
     Exposes zero secrets, credentials, or internal filesystem paths.
     """
@@ -631,26 +647,6 @@ async def delete_upload(
         "status": "DELETED",
         "upload_id": upload_id
     }
-=======
-    Executes a follow-up investigation on an existing incident with additional notes or sensor overrides.
-    """
-    try:
-        verdict = await IncidentService.reinvestigate_with_followup(
-            db=db,
-            incident_id=incident_id,
-            orchestrator=orchestrator,
-            operator_notes=req.operator_notes,
-            telemetry_override=req.telemetry_override
-        )
-        return {
-            "status": "FOLLOW_UP_COMPLETED",
-            "incident_id": incident_id,
-            "verdict": verdict.model_dump() if verdict else None
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Follow-up investigation failed: {str(e)}")
 
 
 @router.get("/system/model-status")
@@ -691,5 +687,3 @@ async def get_confidence_distribution(db: AsyncSession = Depends(get_db)):
 async def get_approval_breakdown(db: AsyncSession = Depends(get_db)):
     """Returns human engineer sign-off audit statistics."""
     return await IncidentService.get_approval_breakdown(db)
-
->>>>>>> main

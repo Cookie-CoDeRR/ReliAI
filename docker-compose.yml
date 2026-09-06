@@ -16,7 +16,7 @@ services:
     networks:
       - reliai-net
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      test: ["CMD", "ollama", "list"]
       interval: 15s
       timeout: 5s
       start_period: 30s

@@ -219,6 +219,8 @@ class AsyncOllamaClient:
                             elif isinstance(val, list) and len(val) > 0 and isinstance(val[0], dict) and target_fields.intersection(val[0].keys()):
                                 parsed_json = val[0]
                                 break
+                    if not target_fields.intersection(parsed_json.keys()):
+                        raise ValueError(f"LLM output does not contain any fields of schema {schema_class.__name__}: {parsed_json}")
 
                 return schema_class.model_validate(parsed_json)
 
