@@ -8,6 +8,7 @@ from web_backend.services.evidence_service import EvidenceService
 from web_backend.services.report_service import ReportService
 from web_backend.services.ingestion_service import IngestionService
 from web_backend.services.upload_service import UploadService
+from web_backend.services.tool_gateway_adapter import ToolGatewayAdapter
 
 __all__ = [
     "ToolAccessService",
@@ -15,5 +16,6 @@ __all__ = [
     "EvidenceService",
     "ReportService",
     "IngestionService",
-    "UploadService"
+    "UploadService",
+    "ToolGatewayAdapter"
 ]
