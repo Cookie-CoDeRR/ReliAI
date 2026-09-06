@@ -1,80 +1,167 @@
 @import "tailwindcss";
+@import "@xyflow/react/dist/style.css";
 
 @layer base {
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  html, body, #root { min-height: 100%; }
-  html { background: #030711; }
-  body {
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
     margin: 0;
-    min-width: 320px;
-    min-height: 100vh;
-    color: #e7edf6;
-    font-family: 'Inter', sans-serif;
-    background:
-      radial-gradient(circle at 20% -15%, rgba(34, 211, 238, .10), transparent 31%),
-      radial-gradient(circle at 90% 5%, rgba(99, 102, 241, .10), transparent 28%),
-      linear-gradient(180deg, #040812 0%, #050a14 55%, #030711 100%);
+    padding: 0;
   }
-  body::before {
-    content: "";
-    position: fixed;
-    inset: 0;
-    pointer-events: none;
-    z-index: -1;
-    opacity: .26;
-    background-image:
-      linear-gradient(rgba(148,163,184,.032) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(148,163,184,.032) 1px, transparent 1px);
-    background-size: 32px 32px;
-    mask-image: linear-gradient(to bottom, #000 0%, transparent 92%);
+  html {
+    background-color: #eddcd0;
+  }
+  body {
+    height: 100vh;
+    width: 100vw;
+    color: #1a1a1a;
+    font-family: 'Inter', sans-serif;
+    background-color: #eddcd0;
+    overflow: hidden;
+    user-select: none;
   }
   h1, h2, h3, h4, .font-heading { font-family: 'Outfit', sans-serif; }
   code, pre, .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .font-pixel, .font-jersey { font-family: 'Jersey 10', cursive, sans-serif; }
   button, input { font: inherit; }
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #060b13; }
-::-webkit-scrollbar-thumb { background: #243147; border-radius: 999px; }
-::-webkit-scrollbar-thumb:hover { background: #33445d; }
+.clean-glass-theme {
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+  border: 1.5px solid rgba(255, 255, 255, 0.95);
+  box-shadow:
+    0 16px 40px -10px rgba(215, 145, 100, 0.12),
+    inset 0 1px 2px rgba(255, 255, 255, 0.95);
+}
 
 .glass-panel,
 .os-panel {
   position: relative;
-  background: linear-gradient(180deg, rgba(10,17,30,.95), rgba(6,11,21,.97));
-  border: 1px solid rgba(71,85,105,.40);
-  box-shadow: 0 20px 50px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.025);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(236, 213, 197, 0.85);
+  box-shadow: 0 10px 30px rgba(220, 140, 90, 0.08);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
-.glass-panel-glow {
-  background: linear-gradient(180deg, rgba(8,18,31,.96), rgba(5,11,21,.97));
-  border: 1px solid rgba(34,211,238,.22);
-  box-shadow: 0 20px 55px rgba(0,0,0,.28), 0 0 45px rgba(34,211,238,.05);
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ecd5c5; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #d98555; }
+
+@keyframes dashFlow {
+  to {
+    stroke-dashoffset: -32;
+  }
 }
 
-.os-grid {
-  background-image:
-    linear-gradient(rgba(34,211,238,.024) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(34,211,238,.024) 1px, transparent 1px);
-  background-size: 24px 24px;
+.animate-dash-flow {
+  stroke-dasharray: 6 4;
+  animation: dashFlow 1.4s linear infinite;
 }
 
-.os-kicker {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: .18em;
-  color: #64748b;
+@keyframes pulseHalo {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.35);
+    opacity: 0.25;
+  }
 }
 
-.os-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: .12em;
-  color: #64748b;
+.animate-pulse-halo {
+  transform-origin: center;
+  animation: pulseHalo 2s ease-in-out infinite;
+}
+
+/* Pipeline Specular Glass Shine */
+@keyframes specularSweep {
+  0% {
+    transform: translateX(-180%) skewX(-25deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.55;
+  }
+  35% {
+    transform: translateX(280%) skewX(-25deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(280%) skewX(-25deg);
+    opacity: 0;
+  }
+}
+
+.animate-specular-sweep {
+  animation: specularSweep 4.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Pipeline Rotating Light Halo */
+@keyframes rotateHalo {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.animate-rotate-halo {
+  animation: rotateHalo 3.2s linear infinite;
+}
+
+/* Circuit Complete Flash Pulse */
+@keyframes circuitFlash {
+  0% { filter: brightness(1) drop-shadow(0 0 0px rgba(6, 182, 212, 0)); }
+  25% { filter: brightness(1.75) drop-shadow(0 0 30px rgba(6, 182, 212, 0.95)); }
+  100% { filter: brightness(1) drop-shadow(0 0 0px rgba(6, 182, 212, 0)); }
+}
+
+.animate-circuit-flash {
+  animation: circuitFlash 1.4s ease-out forwards;
+}
+
+.dotted-grid-canvas {
+  background-color: #fdfbf9;
+  background-image: radial-gradient(rgba(217, 133, 85, 0.22) 1.2px, transparent 1.2px);
+  background-size: 16px 16px;
+}
+
+.theme-grid-overlay {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(200, 110, 65, 0.45) 1.2px, transparent 1.2px),
+    linear-gradient(to bottom, rgba(200, 110, 65, 0.45) 1.2px, transparent 1.2px);
+  mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, #000 30%, transparent 95%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 85% at 50% 50%, #000 30%, transparent 95%);
+}
+
+/* React Flow Canvas overrides for Signature Champagne / Terracotta Theme */
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__controls {
+  box-shadow: 0 4px 20px rgba(217, 133, 85, 0.12) !important;
+  border: 1px solid rgba(236, 213, 197, 0.9) !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(236, 213, 197, 0.7) !important;
+  color: #64748b !important;
+  fill: #64748b !important;
+}
+
+.react-flow__controls-button:hover {
+  background: #faeee5 !important;
+  color: #d98555 !important;
+  fill: #d98555 !important;
 }

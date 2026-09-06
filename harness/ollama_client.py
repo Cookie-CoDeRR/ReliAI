@@ -154,15 +154,15 @@ class AsyncOllamaClient:
         payload: Dict[str, Any] = {
             "model": target_model,
             "prompt": prompt,
-            "system": system_instruction,
+            "system": f"{system_instruction} Output concise, high-density JSON. Keep text fields under 2 sentences.",
             "stream": False,
             "format": "json",
             "keep_alive": "15m",  # Pin model resident in GPU VRAM to prevent reload latency
             "options": {
                 "temperature": 0.05,  # Strictly deterministic industrial reasoning
                 "top_p": 0.85,
-                "num_ctx": 4096,      # Full context budget
-                "num_predict": 2048   # Ample headroom to prevent truncated JSON
+                "num_ctx": 2048,      # Streamlined context window for high throughput
+                "num_predict": 480    # Compact token budget for sub-4s fast report generation
             }
         }
 

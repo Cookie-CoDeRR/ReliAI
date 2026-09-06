@@ -186,4 +186,179 @@ export async function fetchApprovalBreakdown() {
   return response.json();
 }
 
+export async function fetchGpuDiagnostics() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/system/gpu`);
+  if (!response.ok) {
+    throw new Error(`Failed to load GPU diagnostics: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// =============================================================================
+// KUSHAGRA PHASE 1: TOOL ACCESS LAYER & SYSTEM STATUS
+// =============================================================================
+
+export async function fetchSystemStatus() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/system/status`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch system status: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchAvailableTools() {
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/available`);
+  if (!response.ok) {
+    throw new Error(`Failed to load available tools: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function searchLogs({ query, incident_id, agent_name, limit = 50, offset = 0 } = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/search-logs`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, incident_id, agent_name, limit, offset })
+  });
+  if (!response.ok) {
+    throw new Error(`Log search failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchMaintenanceHistory({ component, incident_id, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (component) params.append("component", component);
+  if (incident_id) params.append("incident_id", incident_id);
+  params.append("limit", limit);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/maintenance-history?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to load maintenance history: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function findSimilarIncidents({ station_id, domain, severity, search, limit = 10 } = {}) {
+  const params = new URLSearchParams();
+  if (station_id) params.append("station_id", station_id);
+  if (domain) params.append("domain", domain);
+  if (severity) params.append("severity", severity);
+  if (search) params.append("search", search);
+  params.append("limit", limit);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/similar-incidents?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to find similar incidents: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchSensorData({ incident_id, station_id } = {}) {
+  const params = new URLSearchParams();
+  if (incident_id) params.append("incident_id", incident_id);
+  if (station_id) params.append("station_id", station_id);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/sensor-data?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch sensor data: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function searchDocuments(query, limit = 10) {
+  const params = new URLSearchParams({ query, limit });
+  const response = await fetch(`${API_BASE_URL}/api/v1/tools/search-documents?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Document search failed: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// =============================================================================
+// KUSHAGRA PHASE 2: EVIDENCE & REPORT APIS
+// =============================================================================
+
+export async function fetchIncidentEvidence(incidentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents/${encodeURIComponent(incidentId)}/evidence`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch evidence for ${incidentId}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchIncidentReport(incidentId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/incidents/${encodeURIComponent(incidentId)}/report`);
+  if (!response.ok) {
+    throw new Error(`Failed to generate report for ${incidentId}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// =============================================================================
+// KUSHAGRA PHASE 3: UPLOAD & INGESTION APIS
+// =============================================================================
+
+export async function uploadDocument(file, incidentId = null) {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (incidentId) {
+    formData.append("incident_id", incidentId);
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads`, {
+    method: "POST",
+    body: formData
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Upload failed: ${response.status} ${errText}`);
+  }
+  return response.json();
+}
+
+export async function listUploads({ incident_id, file_type, limit = 50, offset = 0 } = {}) {
+  const params = new URLSearchParams();
+  if (incident_id) params.append("incident_id", incident_id);
+  if (file_type) params.append("file_type", file_type);
+  params.append("limit", limit);
+  params.append("offset", offset);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(`Failed to list uploads: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export async function fetchUploadMetadata(uploadId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads/${encodeURIComponent(uploadId)}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch upload ${uploadId}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+export function getUploadFileUrl(uploadId) {
+  return `${API_BASE_URL}/api/v1/uploads/${encodeURIComponent(uploadId)}/file`;
+}
+
+export async function deleteUpload(uploadId) {
+  const response = await fetch(`${API_BASE_URL}/api/v1/uploads/${encodeURIComponent(uploadId)}`, {
+    method: "DELETE"
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to delete upload ${uploadId}: ${response.statusText}`);
+  }
+  return response.json();
+}
+
+// Convenience Aliases
+export const fetchIncidentHistory = fetchIncidents;
+export const fetchDomainAnalytics = fetchDomainBreakdown;
+export const fetchHumanApprovalStats = fetchApprovalBreakdown;
+export const sendCopilotFollowUp = submitFollowUp;
+
+
+
 
