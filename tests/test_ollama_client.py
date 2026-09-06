@@ -5,7 +5,7 @@ from harness.ollama_client import AsyncOllamaClient
 
 @pytest.mark.asyncio
 async def test_ollama_client_structured_fallback_triage():
-    client = AsyncOllamaClient(mock_fallback=True)
+    client = AsyncOllamaClient(base_url="http://offline-mock-host:9999", mock_fallback=True)
     
     prompt = "Incident alert: Joint 3 thermal sensor reached 88.5°C."
     system = "You are an industrial triage AI."
@@ -18,7 +18,7 @@ async def test_ollama_client_structured_fallback_triage():
 
 @pytest.mark.asyncio
 async def test_ollama_client_structured_fallback_root_cause():
-    client = AsyncOllamaClient(mock_fallback=True)
+    client = AsyncOllamaClient(base_url="http://offline-mock-host:9999", mock_fallback=True)
     
     prompt = "Abnormal thermal readings on Joint 3 with acoustic grind."
     system = "You are a root cause generator."
@@ -32,7 +32,7 @@ async def test_ollama_client_structured_fallback_root_cause():
 
 @pytest.mark.asyncio
 async def test_ollama_client_structured_fallback_critic_contradiction():
-    client = AsyncOllamaClient(mock_fallback=True)
+    client = AsyncOllamaClient(base_url="http://offline-mock-host:9999", mock_fallback=True)
     
     prompt = "Check for contradiction: Thermal sensor > 90°C but motor current is nominal 3.1A."
     system = "You are an adversarial critic."

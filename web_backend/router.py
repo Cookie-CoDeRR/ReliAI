@@ -1,20 +1,39 @@
 import re
+import time
+import json
+import logging
 from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from web_backend.database import get_db
 from web_backend.service import IncidentService
-from web_backend.services.tool_service import ToolAccessService
-from web_backend.services.system_service import SystemService, SystemStatusResponse
-from web_backend.services.evidence_service import EvidenceService
-from web_backend.services.report_service import ReportService
-from web_backend.services.upload_service import UploadService
+from web_backend.services import (
+    ToolAccessService,
+    SystemService,
+    EvidenceService,
+    ReportService,
+    UploadService
+)
+from web_backend.services.system_service import SystemStatusResponse
 from harness.schemas import MultimodalTelemetrySnapshot, HumanApprovalAction
 from harness.orchestrator import InvestigationOrchestrator
 
+
 router = APIRouter(prefix="/api/v1", tags=["Web Platform & Incidents"])
+
+# Service instances for Tool Access, Evidence, Report, and Upload Subsystems
+_tool_access_service = ToolAccessService()
+_evidence_service = EvidenceService()
+_report_service = ReportService(evidence_service=_evidence_service)
+_upload_service = UploadService()
+
+
+# Simple in-memory rate limiter for GPU-intensive endpoints
+# Maps client IP -> last trigger timestamp
+_trigger_cooldowns: Dict[str, float] = {}
+_TRIGGER_COOLDOWN_SEC = 15.0  # Minimum seconds between scenario triggers per client
 
 _shared_orchestrator: Optional[InvestigationOrchestrator] = None
 
@@ -49,6 +68,11 @@ class SearchLogsRequest(BaseModel):
     offset: int = 0
 
 
+class FollowUpRequest(BaseModel):
+    operator_notes: Optional[str] = None
+    telemetry_override: Optional[Dict[str, Any]] = None
+
+
 @router.get("/scenarios")
 async def list_scenarios():
     """Returns all available industrial failure scenario presets."""
@@ -58,13 +82,28 @@ async def list_scenarios():
 @router.post("/scenarios/{scenario_id}/trigger")
 async def trigger_scenario(
     scenario_id: str,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
 ):
     """
     Ingests and runs a full investigation for a pre-configured industrial scenario.
     Validates scenario_id against path traversal attempts.
+    Rate-limited to 1 trigger per 15 seconds per client IP.
     """
+    client_ip = request.client.host if request.client else "unknown"
+    is_local = client_ip in ("127.0.0.1", "::1", "testclient", "localhost")
+    if not is_local:
+        now = time.monotonic()
+        last_trigger = _trigger_cooldowns.get(client_ip, 0.0)
+        if now - last_trigger < _TRIGGER_COOLDOWN_SEC:
+            remaining = round(_TRIGGER_COOLDOWN_SEC - (now - last_trigger), 1)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: please wait {remaining}s before triggering another scenario."
+            )
+        _trigger_cooldowns[client_ip] = now
+
     if not re.match(r"^[a-zA-Z0-9_\-]+$", scenario_id):
         raise HTTPException(status_code=400, detail="Invalid scenario_id format")
 
@@ -93,6 +132,71 @@ async def trigger_scenario(
         "status": incident.status,
         "verdict": verdict.model_dump() if verdict else None
     }
+
+
+@router.post("/scenarios/{scenario_id}/stream")
+async def stream_scenario(
+    scenario_id: str,
+    request: Request,
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Ingests and streams real-time multi-agent deliberation events for an industrial scenario via SSE.
+    Rate-limited to 1 trigger per 15 seconds per client IP.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    is_local = client_ip in ("127.0.0.1", "::1", "testclient", "localhost")
+    if not is_local:
+        now = time.monotonic()
+        last_trigger = _trigger_cooldowns.get(client_ip, 0.0)
+        if now - last_trigger < _TRIGGER_COOLDOWN_SEC:
+            remaining = round(_TRIGGER_COOLDOWN_SEC - (now - last_trigger), 1)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Rate limited: please wait {remaining}s before triggering another scenario."
+            )
+        _trigger_cooldowns[client_ip] = now
+
+    if not re.match(r"^[a-zA-Z0-9_\-]+$", scenario_id):
+        raise HTTPException(status_code=400, detail="Invalid scenario_id format")
+
+    presets = IncidentService.list_preset_scenarios()
+    target = next((s for s in presets if s["scenario_id"] == scenario_id), None)
+    if not target:
+        raise HTTPException(status_code=404, detail=f"Scenario {scenario_id} not found")
+
+    snapshot = MultimodalTelemetrySnapshot.model_validate(target["snapshot"])
+
+    async def event_generator():
+        from web_backend.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            try:
+                incident = await IncidentService.ingest_incident(
+                    db=session,
+                    snapshot=snapshot,
+                    title=target["title"],
+                    severity="CRITICAL" if target["expected_outcome"] == "CONCLUSIVE" else "HIGH"
+                )
+                async for event in IncidentService.stream_investigate_incident(
+                    db=session,
+                    incident_id=incident.id,
+                    orchestrator=orchestrator
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+                yield "event: complete\ndata: {}\n\n"
+            except Exception as err:
+                logging.getLogger("reliai-harness").error(f"Error in scenario SSE stream: {err}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(err)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 
 @router.post("/incidents/ingest")
@@ -178,6 +282,40 @@ async def investigate_incident(
         raise HTTPException(status_code=500, detail=f"Investigation failed: {str(e)}")
 
 
+@router.post("/incidents/{incident_id}/investigate/stream")
+async def stream_investigate_stored_incident(
+    incident_id: str,
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Streams multi-agent deliberation events for an existing stored incident via SSE.
+    """
+    async def event_generator():
+        from web_backend.database import AsyncSessionLocal
+        async with AsyncSessionLocal() as session:
+            try:
+                async for event in IncidentService.stream_investigate_incident(
+                    db=session,
+                    incident_id=incident_id,
+                    orchestrator=orchestrator
+                ):
+                    yield f"data: {json.dumps(event)}\n\n"
+                yield "event: complete\ndata: {}\n\n"
+            except Exception as err:
+                logging.getLogger("reliai-harness").error(f"Error in incident SSE stream: {err}", exc_info=True)
+                yield f"event: error\ndata: {json.dumps({'error': str(err)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 @router.post("/incidents/{incident_id}/approve")
 async def approve_incident(
     incident_id: str,
@@ -206,12 +344,116 @@ async def approve_incident(
         raise HTTPException(status_code=404, detail=str(e))
 
 
+@router.post("/incidents/{incident_id}/cancel")
+async def cancel_incident(
+    incident_id: str,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Cancels an in-flight investigation query or aborts stuck incident processing.
+    """
+    result = await IncidentService.cancel_investigation(db=db, incident_id=incident_id)
+    if result.get("status") == "NOT_FOUND":
+        raise HTTPException(status_code=404, detail=f"Incident {incident_id} not found")
+    return result
+
+
+@router.post("/incidents/{incident_id}/follow-up")
+async def follow_up_investigation(
+    incident_id: str,
+    req: FollowUpRequest,
+    db: AsyncSession = Depends(get_db),
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Executes a follow-up investigation on an existing incident with additional notes or sensor overrides.
+    """
+    try:
+        verdict = await IncidentService.reinvestigate_with_followup(
+            db=db,
+            incident_id=incident_id,
+            orchestrator=orchestrator,
+            operator_notes=req.operator_notes,
+            telemetry_override=req.telemetry_override
+        )
+        return {
+            "status": "FOLLOW_UP_COMPLETED",
+            "incident_id": incident_id,
+            "verdict": verdict.model_dump() if verdict else None
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Follow-up investigation failed: {str(e)}")
+
+
+@router.get("/system/model-status")
+async def check_models(
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Returns the fail-safe readiness status of Ollama, Gemma reasoner, and Qwen2.5-VL vision specialist.
+    """
+    text_status = await orchestrator.client.check_model_readiness()
+    vision_status = await orchestrator.client.check_model_readiness(orchestrator.client.vision_model)
+    return {
+        "text_model": text_status,
+        "vision_model": vision_status,
+        "mock_fallback_enabled": orchestrator.client.mock_fallback
+    }
+
+
+@router.get("/analytics/summary")
+async def get_analytics_summary(db: AsyncSession = Depends(get_db)):
+    """Returns aggregated executive KPI metrics across all incidents."""
+    return await IncidentService.get_analytics_summary(db)
+
+
+@router.get("/analytics/domain-breakdown")
+async def get_domain_breakdown(db: AsyncSession = Depends(get_db)):
+    """Returns incident counts and percentages grouped by failure domain."""
+    return await IncidentService.get_domain_breakdown(db)
+
+
+@router.get("/analytics/confidence-distribution")
+async def get_confidence_distribution(db: AsyncSession = Depends(get_db)):
+    """Returns binned histogram of final confidence scores."""
+    return await IncidentService.get_confidence_distribution(db)
+
+
+@router.get("/analytics/approval-breakdown")
+async def get_approval_breakdown(db: AsyncSession = Depends(get_db)):
+    """Returns human engineer sign-off audit statistics."""
+    return await IncidentService.get_approval_breakdown(db)
+
+
+@router.get("/system/gpu")
+async def get_gpu_diagnostics(
+    orchestrator: InvestigationOrchestrator = Depends(get_orchestrator)
+):
+    """
+    Returns real-time GPU hardware acceleration diagnostics, Apple Silicon Metal metrics,
+    VRAM residency, and token throughput.
+    """
+    from harness.gpu_monitor import get_apple_gpu_hardware_stats, get_ollama_gpu_vram_stats
+    hw_stats = get_apple_gpu_hardware_stats()
+    vram_stats = await get_ollama_gpu_vram_stats(orchestrator.client.base_url)
+    throughput = orchestrator.client.get_throughput_metrics()
+    is_accelerated = (
+        hw_stats.get("device_utilization_pct", 0) > 0 or
+        (vram_stats.get("running", False) and len(vram_stats.get("models", [])) > 0)
+    )
+    return {
+        "hardware": hw_stats,
+        "ollama_vram": vram_stats,
+        "token_throughput": throughput,
+        "gpu_accelerated": is_accelerated
+    }
+
+
 # =============================================================================
 # KUSHAGRA BACKEND VERTICAL — PHASE 1: SYSTEM STATUS & TOOL ACCESS APIs
 # =============================================================================
-
-_tool_access_service = ToolAccessService()
-
 
 @router.get("/system/status", response_model=SystemStatusResponse, tags=["System Services"])
 async def get_system_status(
@@ -311,10 +553,6 @@ async def search_documents(
 # KUSHAGRA BACKEND VERTICAL — PHASE 2: EVIDENCE & REPORT APIs
 # =============================================================================
 
-_evidence_service = EvidenceService()
-_report_service = ReportService(evidence_service=_evidence_service)
-
-
 @router.get("/incidents/{incident_id}/evidence", tags=["Evidence Service"])
 async def get_incident_evidence(
     incident_id: str,
@@ -342,9 +580,6 @@ async def get_incident_report(
 # =============================================================================
 # KUSHAGRA BACKEND VERTICAL — PHASE 3: UPLOAD & INGESTION APIs
 # =============================================================================
-
-_upload_service = UploadService()
-
 
 @router.post("/uploads", tags=["Upload & Ingestion Subsystem"])
 async def upload_file(

@@ -36,8 +36,11 @@ MANIFEST
 # Database
 reliai.db
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+
 
 # Unit test / coverage reports
 htmlcov/

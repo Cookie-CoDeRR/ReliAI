@@ -1,132 +1,78 @@
-import React from 'react';
-import { GitCommit, ShieldAlert, CheckCircle2, XCircle, AlertTriangle, ArrowRight } from 'lucide-react';
+import React from "react";
+import { GitCommit, ShieldAlert, CheckCircle2, XCircle, Scale, Loader2 } from "lucide-react";
 
-export default function CriticDebateView({ rootCause = null, criticReport = null }) {
-  if (!rootCause && !criticReport) {
-    return (
-      <div className="glass-panel rounded-2xl p-6 border border-slate-800 text-center text-slate-500 font-mono text-xs">
-        Select a scenario or trigger investigation to view the Adversarial Reasoning Debate.
-      </div>
-    );
-  }
-
-  const hasContradictions = criticReport?.contradictions_detected?.length > 0;
+export default function CriticDebateView({ rootCause = null, criticReport = null, isInvestigating = false }) {
+  const contradictions = criticReport?.contradictions_detected || [];
+  const challenged = contradictions.length > 0 || criticReport?.is_physically_possible === false;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
-          <ShieldAlert className="w-4 h-4 text-amber-400" />
-          <span>Adversarial Debate & Anti-Hallucination Critic Loop</span>
+    <div className="bg-white/95 backdrop-blur-md rounded-[16px] p-3 border border-[#ecd5c5]/80 shadow-xs flex flex-col justify-between h-full">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="text-[11px] font-mono font-bold text-slate-800">
+          Hypothesis Validation
         </div>
-        <span className={`text-[10px] font-mono px-2.5 py-0.5 rounded border font-bold ${
-          hasContradictions 
-            ? 'bg-rose-950 text-rose-300 border-rose-800' 
-            : 'bg-emerald-950 text-emerald-300 border-emerald-800'
-        }`}>
-          {hasContradictions ? 'CONTRADICTION DETECTED — AI REFUSAL ENFORCED' : 'CROSS-VALIDATED CONSISTENT'}
-        </span>
+        <div
+          className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8.5px] font-mono font-bold ${
+            isInvestigating && !criticReport
+              ? "border-[#efc4ab] bg-[#faeee5] text-[#c8764b]"
+              : challenged
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : criticReport
+              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+              : "border-slate-200 bg-slate-50 text-slate-500"
+          }`}
+        >
+          {isInvestigating && !criticReport ? (
+            <Loader2 className="w-2.5 h-2.5 animate-spin" />
+          ) : challenged ? (
+            <XCircle className="w-2.5 h-2.5" />
+          ) : criticReport ? (
+            <CheckCircle2 className="w-2.5 h-2.5" />
+          ) : (
+            <Scale className="w-2.5 h-2.5" />
+          )}
+          <span>{isInvestigating && !criticReport ? "AUDITING" : challenged ? "CHALLENGED" : criticReport ? "VALIDATED" : "STANDBY"}</span>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left: Generator Hypothesis */}
-        <div className="bg-slate-900/90 rounded-xl p-4 border border-slate-800 flex flex-col justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 flex-1">
+        {/* Generator Claim */}
+        <div className="rounded-[10px] border border-slate-200/80 bg-slate-50/90 p-2.5 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between text-xs font-mono text-indigo-400 mb-2 font-semibold">
-              <span className="flex items-center gap-1.5">
-                <GitCommit className="w-3.5 h-3.5" />
-                Root Cause Hypothesis (Generator)
-              </span>
-              <span className="text-slate-400 font-normal">Score: {rootCause?.preliminary_confidence || 85}%</span>
+            <div className="flex items-center gap-1 text-[9px] font-mono text-[#c8764b] font-bold uppercase mb-1">
+              <GitCommit className="w-3 h-3 text-[#c8764b]" />
+              AI Hypothesis
             </div>
-
-            <h3 className="font-heading font-bold text-sm text-white mb-1.5">
-              {rootCause?.title || "Evaluating Telemetry..."}
-            </h3>
-            <p className="text-xs text-slate-300 font-mono leading-relaxed mb-3">
-              {rootCause?.description || "Awaiting multi-agent telemetry synthesis."}
-            </p>
-
-            {/* Causal Chain */}
-            {rootCause?.causal_chain && (
-              <div className="space-y-1 mb-3">
-                <div className="text-[10px] font-mono font-semibold text-slate-400 uppercase">Causal Failure Chain:</div>
-                {rootCause.causal_chain.map((step, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-[11px] font-mono text-slate-300">
-                    <span className="w-4 h-4 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700 flex items-center justify-center text-[9px] shrink-0">
-                      {idx + 1}
-                    </span>
-                    <span>{step}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="text-[11px] font-semibold text-slate-800 leading-4">
+              {rootCause?.title || (isInvestigating ? "Analyzing failure mode..." : "Awaiting root-cause analysis...")}
+            </div>
           </div>
-
-          {/* Cited Evidence Badges */}
-          <div className="pt-2 border-t border-slate-800 flex flex-wrap items-center gap-1.5">
-            <span className="text-[10px] font-mono text-slate-500">Cited Evidence:</span>
-            {rootCause?.cited_evidence_ids?.map((evId) => (
-              <span key={evId} className="px-2 py-0.5 rounded bg-slate-950 border border-slate-700 text-[10px] font-mono text-cyan-400 font-bold">
-                {evId}
-              </span>
-            ))}
+          <div className="mt-1.5 text-[8.5px] font-mono text-slate-500">
+            Confidence: <strong className="text-slate-800">{rootCause?.preliminary_confidence != null ? `${rootCause.preliminary_confidence}%` : "--"}</strong>
           </div>
         </div>
 
-        {/* Right: Adversarial Critic Audit */}
-        <div className={`rounded-xl p-4 border flex flex-col justify-between ${
-          hasContradictions 
-            ? 'bg-amber-950/30 border-amber-500/50' 
-            : 'bg-slate-900/90 border-slate-800'
-        }`}>
+        {/* Critic Objection */}
+        <div
+          className={`rounded-[10px] border p-2.5 flex flex-col justify-between ${
+            challenged ? "border-rose-200 bg-rose-50/50" : "border-slate-200/80 bg-slate-50/90"
+          }`}
+        >
           <div>
-            <div className="flex items-center justify-between text-xs font-mono mb-2 font-semibold">
-              <span className="flex items-center gap-1.5 text-amber-400">
-                <ShieldAlert className="w-3.5 h-3.5" />
-                Adversarial Critic (Falsification)
-              </span>
-              <span className="text-slate-400 font-normal">
-                Penalty: -{criticReport?.confidence_penalty || 0}%
-              </span>
+            <div className="flex items-center gap-1 text-[9px] font-mono text-amber-700 font-bold uppercase mb-1">
+              <ShieldAlert className="w-3 h-3 text-amber-600" />
+              Critic Review
             </div>
-
-            <div className="mb-2">
-              <div className="flex items-center gap-2 text-xs font-mono font-bold">
-                {criticReport?.is_physically_possible ? (
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <CheckCircle2 className="w-4 h-4" />
-                    Physically Plausible Failure Mode
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 text-rose-400">
-                    <XCircle className="w-4 h-4" />
-                    Physical Inconsistency Detected
-                  </span>
-                )}
-              </div>
+            <div className={`text-[10.5px] leading-4 ${challenged ? "text-rose-900 font-medium" : "text-slate-700"}`}>
+              {criticReport?.objection_summary || (isInvestigating ? "Checking consistency..." : "Pending execution.")}
             </div>
-
-            <p className="text-xs text-slate-300 font-mono leading-relaxed mb-3">
-              {criticReport?.objection_summary || "Performing sensor cross-validation."}
-            </p>
-
-            {/* Contradiction Callout Box */}
-            {hasContradictions && (
-              <div className="bg-rose-950/70 border border-rose-600/70 rounded-lg p-3 text-[11px] font-mono text-rose-200 mb-3">
-                <div className="font-bold text-rose-300 flex items-center gap-1.5 mb-1">
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  Anti-Hallucination Objection:
-                </div>
-                <div>{criticReport.contradictions_detected[0]}</div>
-              </div>
-            )}
           </div>
 
-          <div className="pt-2 border-t border-slate-800/80 text-[10px] font-mono text-slate-400 flex items-center justify-between">
-            <span>Model: DeepSeek-R1 / Qwen-2.5</span>
-            <span className="text-slate-500">Autonomous Verification</span>
-          </div>
+          {challenged && contradictions[0] && (
+            <div className="mt-1.5 text-[8.5px] font-mono text-rose-700 bg-white p-1.5 rounded border border-rose-200 truncate">
+              {contradictions[0]}
+            </div>
+          )}
         </div>
       </div>
     </div>

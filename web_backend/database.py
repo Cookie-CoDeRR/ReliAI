@@ -13,7 +13,7 @@ engine = create_async_engine(
     DATABASE_URL,
     echo=False,
     future=True,
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+    connect_args={"timeout": 30.0, "check_same_thread": False} if "sqlite" in DATABASE_URL else {}
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -23,6 +23,7 @@ AsyncSessionLocal = async_sessionmaker(
 )
 
 Base = declarative_base()
+
 
 
 async def init_db():

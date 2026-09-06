@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { Eye, Volume2, Zap, Wind, AlertTriangle, ShieldCheck, Tag, Disc } from 'lucide-react';
+import { Eye, Volume2, Zap, Disc, Wind } from 'lucide-react';
 
 export default function MultimodalInspector({ telemetry = {}, hasThermalFault = false, hasAcousticFault = false }) {
   const canvasRef = useRef(null);
@@ -13,21 +13,26 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
 
     const renderBars = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const numBars = 32;
+      const numBars = 28;
       const barWidth = canvas.width / numBars;
 
       for (let i = 0; i < numBars; i++) {
-        let height = Math.sin(Date.now() * 0.003 + i * 0.3) * 15 + 20;
+        let height = Math.sin(Date.now() * 0.003 + i * 0.3) * 10 + 14;
         
-        // Spike around high harmonic band (index 18-22 ~ 2.8kHz) if fault active
-        if (hasAcousticFault && i >= 18 && i <= 22) {
-          height = Math.sin(Date.now() * 0.01 + i) * 25 + 50;
-          ctx.fillStyle = '#ef4444';
+        if (hasAcousticFault && i >= 16 && i <= 20) {
+          height = Math.sin(Date.now() * 0.01 + i) * 16 + 36;
+          ctx.fillStyle = '#e11d48';
         } else {
-          ctx.fillStyle = '#06b6d4';
+          ctx.fillStyle = '#d98555';
         }
 
-        ctx.fillRect(i * barWidth + 1, canvas.height - height, barWidth - 2, height);
+        ctx.beginPath();
+        const x = i * barWidth + 1.5;
+        const y = canvas.height - height;
+        const w = barWidth - 3;
+        const radius = 2;
+        ctx.roundRect ? ctx.roundRect(x, y, w, height, [radius, radius, 0, 0]) : ctx.rect(x, y, w, height);
+        ctx.fill();
       }
 
       animationFrameId = requestAnimationFrame(renderBars);
@@ -45,146 +50,108 @@ export default function MultimodalInspector({ telemetry = {}, hasThermalFault = 
   const pressure = telemetry.pneumatic_pressure_bar || 6.2;
   const conveyor = telemetry.conveyor || { belt_speed_mps: 0.5, belt_tension_n: 320.0 };
   const lube = telemetry.bead_lubrication || { nozzle_pressure_bar: 3.5, lube_flow_rate_lpm: 0.45, nozzle_clog_detected: false };
-  const tire = telemetry.tire_metadata || { tire_sku: "Michelin Pilot Sport 5 225/45 R17", dot_code: "DOT 6X 7Y 0126" };
 
   const hasLubeFault = lube.nozzle_pressure_bar < 2.2 || lube.nozzle_clog_detected;
   const hasConveyorFault = conveyor.belt_speed_mps < 0.35 || conveyor.belt_tension_n < 240;
 
   return (
-    <div className="glass-panel rounded-2xl p-5 border border-slate-800 shadow-xl space-y-4">
+    <div className="bg-white/95 backdrop-blur-md rounded-[16px] p-3 border border-[#ecd5c5]/80 shadow-xs space-y-2.5">
+      {/* Clean, simplified header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs font-mono font-semibold text-slate-400 uppercase tracking-wider">
-          <Eye className="w-4 h-4 text-cyan-400" />
-          <span>Multimodal Hardware Telemetry & Michelin Conveyor Bus</span>
+        <div className="flex items-center gap-1.5 text-[11px] font-mono font-bold text-slate-800">
+          <Eye className="w-3.5 h-3.5 text-[#c8764b]" />
+          <span>Hardware Telemetry Bus</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-mono text-amber-400 bg-amber-950/60 px-2 py-0.5 rounded border border-amber-800 flex items-center gap-1">
-            <Tag className="w-3 h-3" />
-            {tire.tire_sku.split(" ")[0]} {tire.tire_sku.split(" ")[1] || "TIRE"}
-          </span>
-          <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 px-2.5 py-0.5 rounded border border-cyan-800">
-            OPC UA / SPARKPLUG B
-          </span>
-        </div>
+        <span className="text-[9px] font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+          ONLINE
+        </span>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* 1. Thermal Thermography Inspector */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <Eye className="w-3.5 h-3.5 text-rose-400" />
-              FLIR IR Thermal Matrix
-            </span>
-            <span className={hasThermalFault ? "text-rose-400 font-bold" : "text-emerald-400"}>
-              {hasThermalFault ? "HOTSPOT DETECTED" : "NOMINAL"}
+      {/* 3 Calm Analytics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {/* 1. Thermal Thermography */}
+        <div className="bg-slate-50/90 rounded-[12px] p-2 border border-slate-200/80 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mb-1">
+            <span>Thermal IR</span>
+            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${hasThermalFault ? "bg-rose-50 text-rose-600 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+              {hasThermalFault ? "HOTSPOT" : "NOMINAL"}
             </span>
           </div>
 
-          <div className="relative h-28 rounded-lg overflow-hidden border border-slate-800 bg-gradient-to-tr from-slate-950 via-blue-950 to-indigo-950 flex items-center justify-center">
+          <div className="relative h-16 rounded-[8px] overflow-hidden border border-[#ecd5c5]/70 bg-gradient-to-tr from-[#fdfbf9] via-[#faeee5] to-[#f5ddd0] flex items-center justify-center">
             <div 
-              className={`w-20 h-20 rounded-full blur-xl transition-all ${
+              className={`w-14 h-14 rounded-full blur-lg transition-all ${
                 hasThermalFault 
-                  ? 'bg-gradient-to-r from-amber-500 via-rose-600 to-red-500 scale-125 animate-pulse opacity-90' 
-                  : 'bg-gradient-to-r from-blue-600 to-cyan-500 scale-75 opacity-40'
+                  ? 'bg-gradient-to-r from-amber-400 to-rose-500 scale-110 opacity-80' 
+                  : 'bg-[#ebd8cb] scale-75 opacity-40'
               }`} 
             />
-            <div className="absolute inset-0 flex flex-col items-center justify-center font-mono text-[11px] text-white drop-shadow">
-              <span className="font-bold text-base">{hasThermalFault ? '88.5°C' : '44.2°C'}</span>
-              <span className="text-[9px] text-slate-300">Joint 3 Housing</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center font-mono text-slate-900">
+              <span className="font-bold text-sm">{hasThermalFault ? '88.5°C' : '44.2°C'}</span>
+              <span className="text-[8.5px] text-slate-600">Joint 3</span>
             </div>
           </div>
-          <p className="text-[10px] text-slate-500 font-mono mt-2">IR Matrix 160x120 px • Limit: 65°C</p>
         </div>
 
-        {/* 2. Acoustic FFT Waveform Inspector */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <Volume2 className="w-3.5 h-3.5 text-sky-400" />
-              Acoustic Hydrophone FFT
-            </span>
-            <span className={hasAcousticFault ? "text-rose-400 font-bold" : "text-emerald-400"}>
-              {hasAcousticFault ? "2.8 kHz PEAK" : "72 dB NOMINAL"}
+        {/* 2. Acoustic FFT */}
+        <div className="bg-slate-50/90 rounded-[12px] p-2 border border-slate-200/80 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mb-1">
+            <span>Acoustic FFT</span>
+            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${hasAcousticFault ? "bg-rose-50 text-rose-600 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+              {hasAcousticFault ? "2.8 kHz PEAK" : "NORMAL"}
             </span>
           </div>
 
-          <div className="h-28 rounded-lg overflow-hidden border border-slate-800 bg-slate-950 p-2 flex items-center justify-center">
-            <canvas ref={canvasRef} width={220} height={90} className="w-full h-full" />
+          <div className="h-16 rounded-[8px] overflow-hidden border border-slate-200/80 bg-white p-1.5 flex items-center justify-center">
+            <canvas ref={canvasRef} width={200} height={56} className="w-full h-full" />
           </div>
-          <p className="text-[10px] text-slate-500 font-mono mt-2">Sampling: 48 kHz • Band: 0 - 24 kHz</p>
         </div>
 
-        {/* 3. Electrical & Pneumatic Power Grid */}
-        <div className="bg-slate-900/90 rounded-xl p-3.5 border border-slate-800 flex flex-col justify-between">
-          <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
-            <span className="flex items-center gap-1.5 font-semibold text-slate-300">
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              Power & Pneumatics
-            </span>
-            <span className={voltage < 380 || pressure < 5.0 ? "text-rose-400 font-bold" : "text-emerald-400"}>
-              {voltage < 380 ? "VOLTAGE SAG" : pressure < 5.0 ? "LOW PRESSURE" : "GRID STABLE"}
+        {/* 3. Power & Pressure */}
+        <div className="bg-slate-50/90 rounded-[12px] p-2 border border-slate-200/80 flex flex-col justify-between">
+          <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 mb-1">
+            <span>Power & Pressure</span>
+            <span className={`px-1.5 py-0.2 rounded text-[8px] font-bold ${voltage < 380 || pressure < 5.0 ? "bg-rose-50 text-rose-600 border border-rose-200" : "bg-emerald-50 text-emerald-700 border border-emerald-200"}`}>
+              {voltage < 380 ? "SAG" : pressure < 5.0 ? "LOW" : "STABLE"}
             </span>
           </div>
 
-          <div className="h-28 rounded-lg border border-slate-800 bg-slate-950 p-3 grid grid-cols-3 gap-2 text-center font-mono">
-            <div className="flex flex-col justify-center bg-slate-900/80 rounded p-1">
-              <span className="text-[9px] text-slate-400">VOLTAGE</span>
-              <span className={`text-xs font-bold ${voltage < 380 ? 'text-rose-400' : 'text-cyan-300'}`}>{voltage.toFixed(0)}V</span>
-              <span className="text-[8px] text-slate-500">Nom: 400V</span>
+          <div className="h-16 rounded-[8px] border border-slate-200/80 bg-white p-1 grid grid-cols-3 gap-1 text-center font-mono">
+            <div className="flex flex-col justify-center bg-slate-50 rounded">
+              <span className="text-[7.5px] text-slate-400">VOLTS</span>
+              <span className={`text-[10px] font-bold ${voltage < 380 ? 'text-rose-600' : 'text-slate-800'}`}>{voltage.toFixed(0)}V</span>
             </div>
-
-            <div className="flex flex-col justify-center bg-slate-900/80 rounded p-1">
-              <span className="text-[9px] text-slate-400">CURRENT</span>
-              <span className={`text-xs font-bold ${current > 20 ? 'text-rose-400' : 'text-cyan-300'}`}>{current.toFixed(1)}A</span>
-              <span className="text-[8px] text-slate-500">Max: 24A</span>
+            <div className="flex flex-col justify-center bg-slate-50 rounded">
+              <span className="text-[7.5px] text-slate-400">AMPS</span>
+              <span className={`text-[10px] font-bold ${current > 20 ? 'text-rose-600' : 'text-slate-800'}`}>{current.toFixed(1)}A</span>
             </div>
-
-            <div className="flex flex-col justify-center bg-slate-900/80 rounded p-1">
-              <span className="text-[9px] text-slate-400">PRESSURE</span>
-              <span className={`text-xs font-bold ${pressure < 5.0 ? 'text-rose-400' : 'text-sky-300'}`}>{pressure.toFixed(1)}b</span>
-              <span className="text-[8px] text-slate-500">Nom: 6.2b</span>
+            <div className="flex flex-col justify-center bg-slate-50 rounded">
+              <span className="text-[7.5px] text-slate-400">BAR</span>
+              <span className={`text-[10px] font-bold ${pressure < 5.0 ? 'text-rose-600' : 'text-slate-800'}`}>{pressure.toFixed(1)}b</span>
             </div>
           </div>
-          <p className="text-[10px] text-slate-500 font-mono mt-2">3-Phase 400V RMS • 6.2 bar Gripper Line</p>
         </div>
       </div>
 
-      {/* Michelin Conveyor Belt & Bead Lubrication Bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
-        {/* Conveyor Line Telemetry */}
-        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <Disc className={`w-4 h-4 ${hasConveyorFault ? 'text-rose-400 animate-spin' : 'text-cyan-400'}`} />
-            <div>
-              <div className="text-[10px] text-slate-400 font-sans font-semibold">INFEED CONVEYOR BELT</div>
-              <div className="text-slate-200">
-                Speed: <span className={hasConveyorFault ? "text-rose-400 font-bold" : "text-cyan-300 font-bold"}>{conveyor.belt_speed_mps.toFixed(2)} m/s</span>
-                <span className="text-slate-500 mx-1.5">•</span>
-                Tension: <span className="text-slate-300">{conveyor.belt_tension_n.toFixed(0)} N</span>
-              </div>
-            </div>
+      {/* Conveyor & Lube Status (Clean summary line) */}
+      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+        <div className="bg-slate-50/90 rounded-[10px] px-2.5 py-1.5 border border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-slate-700">
+            <Disc className="w-3 h-3 text-[#c8764b]" />
+            <span>Conveyor: <strong>{conveyor.belt_speed_mps.toFixed(2)} m/s</strong></span>
           </div>
-          <span className={`px-2 py-0.5 rounded text-[10px] ${hasConveyorFault ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
-            {hasConveyorFault ? 'BELT SLIP' : 'TRACKING OK'}
+          <span className={`text-[8px] font-bold ${hasConveyorFault ? 'text-rose-600' : 'text-emerald-700'}`}>
+            {hasConveyorFault ? 'SLIP' : 'OK'}
           </span>
         </div>
 
-        {/* Bead Lubrication System */}
-        <div className="bg-slate-900/70 rounded-xl p-3 border border-slate-800 flex items-center justify-between font-mono text-xs">
-          <div className="flex items-center gap-2">
-            <Wind className={`w-4 h-4 ${hasLubeFault ? 'text-rose-400 animate-pulse' : 'text-teal-400'}`} />
-            <div>
-              <div className="text-[10px] text-slate-400 font-sans font-semibold">BEAD LUBRICANT ATOMIZER</div>
-              <div className="text-slate-200">
-                Pressure: <span className={hasLubeFault ? "text-rose-400 font-bold" : "text-teal-300 font-bold"}>{lube.nozzle_pressure_bar.toFixed(2)} bar</span>
-                <span className="text-slate-500 mx-1.5">•</span>
-                Flow: <span className="text-slate-300">{lube.lube_flow_rate_lpm.toFixed(2)} LPM</span>
-              </div>
-            </div>
+        <div className="bg-slate-50/90 rounded-[10px] px-2.5 py-1.5 border border-slate-200/80 flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-slate-700">
+            <Wind className="w-3 h-3 text-[#c8764b]" />
+            <span>Lube: <strong>{lube.nozzle_pressure_bar.toFixed(2)} bar</strong></span>
           </div>
-          <span className={`px-2 py-0.5 rounded text-[10px] ${hasLubeFault ? 'bg-rose-950 text-rose-300 border border-rose-800' : 'bg-emerald-950 text-emerald-300 border border-emerald-800'}`}>
-            {hasLubeFault ? 'NOZZLE CLOGGED' : 'ATOMIZING OK'}
+          <span className={`text-[8px] font-bold ${hasLubeFault ? 'text-rose-600' : 'text-emerald-700'}`}>
+            {hasLubeFault ? 'CLOG' : 'OK'}
           </span>
         </div>
       </div>
