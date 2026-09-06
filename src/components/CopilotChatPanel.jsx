@@ -132,7 +132,7 @@ export default function CopilotChatPanel({
   const hasMessages = messages.length > 0 || isInvestigating;
 
   return (
-    <div className="h-full w-full flex flex-col justify-between p-3.5 bg-white/95 backdrop-blur-md rounded-[10px] border border-white/80 shadow-xs overflow-hidden transition-all duration-300">
+    <div className="h-full min-h-0 w-full flex flex-col justify-between p-3.5 bg-white/95 backdrop-blur-md rounded-[10px] border border-white/80 shadow-xs overflow-hidden transition-all duration-300">
       
       {/* Top Header (Only visible when user starts talking, small ReliAI title at top) */}
       {hasMessages && (

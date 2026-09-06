@@ -15,6 +15,9 @@ import LivePipelineVisualizer from './components/pipeline/LivePipelineVisualizer
 import ToolboxExplorerView from './components/ToolboxExplorerView';
 import LandingPageView from './components/LandingPageView';
 import AuthModal from './components/AuthModal';
+import AccountControlPanel from './components/AccountControlPanel';
+import ProfileModal from './components/ProfileModal';
+import SettingsModal from './components/SettingsModal';
 import { subscribeToAuthChanges, logoutUser } from './services/firebase';
 import {
   fetchScenarios,
@@ -76,6 +79,10 @@ export default function App() {
   const [gpuStats, setGpuStats] = useState(null);
   const [user, setUser] = useState(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+  // Profile & Settings Modals State
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   // Global synchronized Copilot chat messages
   const [chatMessages, setChatMessages] = useState([
@@ -588,24 +595,25 @@ export default function App() {
         {/* WORKSPACE CONTENT AREA */}
         <div className="flex-1 min-h-0 flex gap-3 sm:gap-4 items-stretch overflow-hidden pt-0.5">
           
-          {/* LEFT SIDEBAR: Clean white card */}
-          <aside className="w-[165px] sm:w-[185px] md:w-[200px] h-full bg-white/95 backdrop-blur-md rounded-[12px] p-4 sm:p-5 shadow-xs border border-white/80 flex flex-col justify-start shrink-0">
-            <div className="flex flex-col space-y-3 sm:space-y-4 text-left">
+          {/* LEFT SIDEBAR: Clean white card with integrated bottom account control */}
+          <aside className="w-[170px] sm:w-[190px] md:w-[210px] h-full bg-white/95 backdrop-blur-md rounded-[12px] p-3.5 sm:p-4 shadow-xs border border-white/80 flex flex-col shrink-0 overflow-hidden">
+            {/* Top Navigation Items */}
+            <div className="flex-1 min-h-0 flex flex-col space-y-2.5 sm:space-y-3 text-left overflow-y-auto pr-1">
               <button
                 onClick={() => setActiveTab("Landing")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight flex items-center justify-between ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight flex items-center justify-between ${
                   activeTab === "Landing"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
                 }`}
               >
                 <span>Landing Page</span>
-                <span className="text-[9.5px] uppercase font-mono px-1.5 py-0.2 bg-[#faeee5] text-[#c8764b] rounded-[4px] border border-[#ecd7c7]">Home</span>
+                <span className="text-[9px] uppercase font-mono px-1.5 py-0.2 bg-[#faeee5] text-[#c8764b] rounded border border-[#ecd7c7]">Home</span>
               </button>
 
               <button
                 onClick={() => setActiveTab("Dashboard")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Dashboard"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -616,7 +624,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Live Pipeline")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Live Pipeline"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -627,7 +635,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Streaming Visualisation")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Streaming Visualisation"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -638,7 +646,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Toolbox & Hub")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Toolbox & Hub"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -649,7 +657,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Evidence Inspector")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Evidence Inspector"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -660,7 +668,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Incident History")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Incident History"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -671,7 +679,7 @@ export default function App() {
 
               <button
                 onClick={() => setActiveTab("Connected Machinery")}
-                className={`text-left text-[13.5px] sm:text-[14.5px] transition cursor-pointer leading-tight ${
+                className={`text-left text-[13px] sm:text-[14px] transition cursor-pointer leading-tight ${
                   activeTab === "Connected Machinery"
                     ? "text-[#c8764b] font-semibold"
                     : "text-slate-800 hover:text-[#c8764b]"
@@ -679,6 +687,15 @@ export default function App() {
               >
                 Connected<br />Machinery
               </button>
+            </div>
+
+            {/* Bottom Account Control Section */}
+            <div className="shrink-0 pt-3 mt-auto border-t border-slate-200/80">
+              <AccountControlPanel
+                user={user}
+                onOpenProfile={() => setIsProfileOpen(true)}
+                onOpenSettings={() => setIsSettingsOpen(true)}
+              />
             </div>
           </aside>
 
@@ -693,7 +710,7 @@ export default function App() {
             </main>
           ) : isDashboardTab ? (
             /* ============================================================ */
-            /* TAB 1: MAIN LANDING DASHBOARD (Clean, Spacious, No 3D Box)  */
+            /* TAB 1: MAIN LANDING DASHBOARD (Clean, Spacious)              */
             /* ============================================================ */
             <main className="flex-1 min-w-0 h-full bg-white/95 backdrop-blur-md rounded-[12px] p-6 sm:p-8 border border-white/80 shadow-xs flex flex-col justify-between overflow-hidden select-text">
               
@@ -758,8 +775,8 @@ export default function App() {
               </div>
 
               {/* BOTTOM SECTION: Frosted Glass Capsule Bar */}
-              <div className="shrink-0 flex flex-col items-center justify-center pt-3 pb-1 w-full">
-                <div className="relative w-full max-w-2xl mx-auto group z-30">
+              <div className="shrink-0 flex flex-col items-center justify-center pt-3 pb-1 w-full max-w-2xl mx-auto">
+                <div className="relative w-full group z-30">
                   {/* Ambient Glow */}
                   <div className="absolute -inset-1 bg-gradient-to-r from-[#f5b896]/35 via-[#e8905b]/45 to-[#f5b896]/35 rounded-full blur-xl -z-10 opacity-80 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
 
@@ -919,9 +936,6 @@ export default function App() {
               ) : activeTab === "Streaming Visualisation" ? (
                 /* ============================================================ */
                 /* STREAMING VISUALISATION: DYNAMIC STAGE (Graph vs Report)      */
-                /* When report is generated:                                    */
-                /* - If hardware fault detected: Render on top + Report below   */
-                /* - If nominal / no fault: Full-screen Report                  */
                 /* ============================================================ */
                 <div className="flex-1 min-w-0 h-full flex flex-col gap-2.5 overflow-hidden">
                   
@@ -1065,18 +1079,20 @@ export default function App() {
               )}
 
               {/* RIGHT PANEL: PERSISTENT COPILOT CHAT */}
-              <aside className="h-full min-h-0 overflow-hidden">
-                <CopilotChatPanel
-                  activeIncidentId={selectedIncidentId || currentIncidentId}
-                  isInvestigating={isInvestigating}
-                  activeAgent={activeAgent}
-                  agentTraces={agentTraces}
-                  onTriggerInvestigation={() => handleTriggerScenario(activeScenarioId)}
-                  activeScenarioName={activeScenarioId}
-                  messages={chatMessages}
-                  setMessages={setChatMessages}
-                  onSendMessage={handleGlobalSendMessage}
-                />
+              <aside className="h-full min-h-0 overflow-hidden flex flex-col gap-2.5 shrink-0">
+                <div className="h-full min-h-[180px] overflow-hidden">
+                  <CopilotChatPanel
+                    activeIncidentId={selectedIncidentId || currentIncidentId}
+                    isInvestigating={isInvestigating}
+                    activeAgent={activeAgent}
+                    agentTraces={agentTraces}
+                    onTriggerInvestigation={() => handleTriggerScenario(activeScenarioId)}
+                    activeScenarioName={activeScenarioId}
+                    messages={chatMessages}
+                    setMessages={setChatMessages}
+                    onSendMessage={handleGlobalSendMessage}
+                  />
+                </div>
               </aside>
 
             </main>
@@ -1108,6 +1124,19 @@ export default function App() {
         onAuthSuccess={(authenticatedUser) => {
           setUser(authenticatedUser);
         }}
+      />
+
+      {/* Profile Modal */}
+      <ProfileModal
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        user={user}
+      />
+
+      {/* Settings Modal */}
+      <SettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
       />
     </div>
   );
