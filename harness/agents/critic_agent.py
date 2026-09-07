@@ -56,6 +56,9 @@ class CriticAgent:
         - Line Voltage: {snapshot.line_voltage_v} V
         - Total Current: {snapshot.total_current_a} A
         - Pneumatic Pressure: {snapshot.pneumatic_pressure_bar} bar
+        - Conveyor: {snapshot.conveyor.model_dump() if snapshot.conveyor else 'N/A'}
+        - Bead Lubrication: {snapshot.bead_lubrication.model_dump() if snapshot.bead_lubrication else 'N/A'}
+        - Tire Fitment: {snapshot.tire_fitment.model_dump() if snapshot.tire_fitment else 'N/A'}
         - Joints: { {k: f"Temp: {v.temp_c}°C, Torque: {v.torque_nm}Nm, Curr: {v.motor_current_a}A" for k, v in snapshot.joints.items()} }
         - Acoustic Anomalies: {[a.model_dump() for a in snapshot.acoustic_anomalies]}
         - Detected Evidence Items: {[e.model_dump() for e in evidence_items]}
@@ -63,25 +66,20 @@ class CriticAgent:
         ALGORITHMIC SENSOR CONTRADICTION SCAN:
         {algorithmic_contradictions}
 
-        TASK:
-        You are the Adversarial Safety Critic. Your job is to challenge this hypothesis.
-        Search for:
-        1. Any physical contradictions in the telemetry.
-        2. Any missing sensor evidence that would be physically required for this failure.
-        3. Assign an appropriate confidence penalty (0.0 if validated, 25.0 - 50.0 if contradictions exist).
-
-        Respond with structured CriticEvaluation JSON:
-        - hypothesis_title (string)
-        - is_physically_possible (boolean)
-        - contradictions_detected (list of strings)
-        - missing_evidence_notes (list of strings)
-        - objection_summary (string)
-        - confidence_penalty (float 0.0 to 100.0)
+        CRITICAL EVALUATION RULES:
+        1. Telemetry that deviates in the direction of the failure mode (e.g. high heat for thermal failure, low voltage for voltage sag, low pressure/flow for lube or pneumatic failure) is CORROBORATING evidence, NOT a contradiction.
+        2. Only flag contradictions if telemetry physically REFUTES the hypothesis (e.g., claiming 90°C overheat when sensors measure 25°C, or claiming pneumatic pressure loss when line pressure is 6.2 bar).
+        3. If evidence is consistent and corroborates the failure mode:
+           - is_physically_possible: true
+           - contradictions_detected: []
+           - missing_evidence_notes: []
+           - confidence_penalty: 0.0
+           - objection_summary: "Physical telemetry corroborates the proposed root cause."
         """
 
         system = (
             "You are the ReliAI Adversarial Critic Agent. Your purpose is to falsify flawed industrial AI "
-            "hypotheses and expose conflicting sensor data to prevent plant downtime or safety hazards."
+            "hypotheses and expose conflicting sensor data. Do NOT flag corroborating sensor evidence as contradictions."
         )
 
         critic_eval = await self.client.generate_structured(prompt, system, CriticEvaluation)
@@ -96,7 +94,7 @@ class CriticAgent:
             )
 
         # -------------------------------------------------------------
-        # ELECTRICAL POWER SAG CONSISTENCY GUARD
+        # TELEMETRY CORROBORATION GUARDS (Eliminate LLM False-Positive Objections)
         # -------------------------------------------------------------
         hypothesis_text = (
             f"{hypothesis.title} "
@@ -104,59 +102,53 @@ class CriticAgent:
             f"{hypothesis.affected_component}"
         ).lower()
 
-        is_electrical_hypothesis = any(
-            term in hypothesis_text
-            for term in (
-                "electrical",
-                "undervoltage",
-                "voltage",
-                "power supply",
-                "brownout",
-                "3-phase"
-            )
+        # Guard 1: Electrical Voltage Sag
+        is_electrical = any(t in hypothesis_text for t in ("electrical", "undervoltage", "voltage", "power supply", "brownout", "3-phase"))
+        if is_electrical and snapshot.line_voltage_v < 380.0:
+            critic_eval.contradictions_detected = [
+                c for c in critic_eval.contradictions_detected
+                if not any(k in c.lower() for k in ("voltage", "current", "threshold", "deviation", "below", "exceeding", "load"))
+            ]
+
+        # Guard 2: Joint / Mechanical Thermal Overheat (Only when corroborated by elevated current or acoustic vibration)
+        is_thermal = any(t in hypothesis_text for t in ("thermal", "overheat", "harmonic", "bearing", "friction", "seizure"))
+        has_corroborated_overheat = any(
+            (j.temp_c > 75.0 and (j.motor_current_a > 4.0 or len(snapshot.acoustic_anomalies) > 0))
+            for j in snapshot.joints.values()
         )
+        if is_thermal and has_corroborated_overheat:
+            critic_eval.contradictions_detected = [
+                c for c in critic_eval.contradictions_detected
+                if not any(k in c.lower() for k in ("temperature", "heat", "hotspot", "grind", "thermal", "exceeding"))
+            ]
 
-        # The golden electrical baseline defines < 380 V as an abnormal
-        # undervoltage condition. A negative deviation percentage simply
-        # means voltage is below nominal; it is not contradictory evidence.
-        if is_electrical_hypothesis and snapshot.line_voltage_v < 380.0:
+        # Guard 3: Lubrication & Conveyor Faults
+        is_lube_conveyor = any(t in hypothesis_text for t in ("lubricat", "nozzle", "clog", "conveyor", "belt", "slip", "seating"))
+        has_lube_or_conveyor_fault = (
+            (snapshot.bead_lubrication and (snapshot.bead_lubrication.nozzle_clog_detected or snapshot.bead_lubrication.nozzle_pressure_bar < 2.5))
+            or (snapshot.conveyor and (snapshot.conveyor.belt_speed_mps < 0.4 or snapshot.conveyor.belt_tension_n < 250.0))
+        )
+        if is_lube_conveyor and has_lube_or_conveyor_fault:
+            critic_eval.contradictions_detected = [
+                c for c in critic_eval.contradictions_detected
+                if not any(k in c.lower() for k in ("lube", "nozzle", "clog", "pressure", "conveyor", "slip", "tension", "speed"))
+            ]
 
-            filtered_contradictions = []
+        # Guard 4: Pneumatic Gripper Faults
+        is_pneumatic = any(t in hypothesis_text for t in ("pneumatic", "gripper", "solenoid", "air pressure", "blow-by"))
+        if is_pneumatic and snapshot.pneumatic_pressure_bar < 5.5:
+            critic_eval.contradictions_detected = [
+                c for c in critic_eval.contradictions_detected
+                if not any(k in c.lower() for k in ("pneumatic", "pressure", "gripper", "solenoid", "bar"))
+            ]
 
-            for contradiction in critic_eval.contradictions_detected:
-                c = contradiction.lower()
-
-                is_sign_math_false_positive = (
-                    "voltage" in c
-                    and (
-                        "deviation" in c
-                        or "threshold" in c
-                        or "below" in c
-                        or "undervoltage" in c
-                    )
-                )
-
-                if not is_sign_math_false_positive:
-                    filtered_contradictions.append(contradiction)
-
-            critic_eval.contradictions_detected = filtered_contradictions
-
-            if not filtered_contradictions:
-                critic_eval.is_physically_possible = True
-                critic_eval.confidence_penalty = 0.0
-                critic_eval.objection_summary = (
-                    f"Electrical power sag is physically supported by the "
-                    f"measured line voltage of {snapshot.line_voltage_v:.1f} V, "
-                    f"which is below the 380 V minimum allowable threshold."
-                )
-
-        # Keep schema internally consistent:
-        # contradictions always imply a failed physical validation.
-        if critic_eval.contradictions_detected:
+        if not critic_eval.contradictions_detected:
+            critic_eval.is_physically_possible = True
+            critic_eval.confidence_penalty = 0.0
+            if not critic_eval.objection_summary or "contradiction" in critic_eval.objection_summary.lower():
+                critic_eval.objection_summary = "Telemetry consistency physically corroborated."
+        else:
             critic_eval.is_physically_possible = False
-            critic_eval.confidence_penalty = max(
-                critic_eval.confidence_penalty,
-                25.0
-            )
+            critic_eval.confidence_penalty = max(critic_eval.confidence_penalty, 25.0)
 
         return critic_eval
